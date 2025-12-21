@@ -2531,5 +2531,495 @@ func ProcessVideo(ctx context.Context, m pubsub.Message) error {
 - **Clientes amam**: imóveis mais bonitos, tour organizado
 - **Plataforma cresce**: diferencial claro vs concorrentes
 
-## 24. Conclusão
-MVP sólido, governável, multi-tenant, **LGPD-compliant**, com **design moderno**, **otimização de mídia por IA** e preparado para escalar no ecossistema Google Cloud.
+## 24. Whitelabel (Branding Personalizado por Tenant)
+
+### 24.1 Conceito de Whitelabel
+
+**Whitelabel** permite que cada tenant (imobiliária) tenha sua **própria identidade visual** na plataforma, incluindo:
+- Logo personalizado
+- Cores da marca (paleta completa)
+- Nome da empresa
+- Domínio customizado (opcional)
+- Informações de contato
+
+**Objetivo**: Cada imobiliária sente que possui **sua própria plataforma**, não uma plataforma compartilhada.
+
+### 24.2 Status Atual (MVP)
+
+**Arquitetura Multi-Tenant: ✅ 100%**
+- Isolamento completo de dados por `tenant_id`
+- Firestore Security Rules impedem vazamento cross-tenant
+- `Tenant.settings` é flexível (`map[string]interface{}`)
+
+**Branding Dinâmico: ⚠️ 40%**
+- ❌ Frontend usa variáveis de ambiente globais (`NEXT_PUBLIC_APP_NAME`)
+- ❌ Cores hardcoded em `tailwind.config.ts`
+- ❌ Logo sempre renderiza placeholder genérico
+- ⚠️ Meta tags usam `tenant.name` (parcial)
+
+**Conclusão**: Fundação sólida, mas **branding ainda não é dinâmico**.
+
+### 24.3 Campos de Branding no Tenant.settings
+
+**Campos obrigatórios para whitelabel completo**:
+
+```go
+type TenantSettings struct {
+    // Contato
+    WhatsAppDefault string `json:"whatsapp_default"`
+    ContactEmail    string `json:"contact_email"`
+    ContactPhone    string `json:"contact_phone"`
+
+    // Branding Visual
+    BusinessName    string `json:"business_name"`      // "Imobiliária Primavera"
+    Tagline         string `json:"tagline,omitempty"`  // "Seu lar dos sonhos"
+    LogoURL         string `json:"logo_url"`           // GCS URL
+    FaviconURL      string `json:"favicon_url"`        // GCS URL
+
+    // Paleta de Cores (hex)
+    PrimaryColor    string `json:"primary_color"`      // "#0066FF"
+    SecondaryColor  string `json:"secondary_color"`    // "#E8EAED"
+    AccentColor     string `json:"accent_color"`       // "#22C55E"
+
+    // Domínio Customizado (Opcional - MVP+2)
+    CustomDomain    string `json:"custom_domain,omitempty"` // "minhaimobiliaria.com.br"
+
+    // SEO
+    MetaDescription string `json:"meta_description,omitempty"`
+    MetaKeywords    string `json:"meta_keywords,omitempty"`
+}
+```
+
+### 24.4 Frontend Dinâmico
+
+**Problema Atual**:
+```typescript
+// ❌ ATUAL: Branding estático
+export const branding = {
+  name: process.env.NEXT_PUBLIC_APP_NAME || "ImóvelHub",
+  logo: process.env.NEXT_PUBLIC_LOGO_URL || "/logo.svg",
+  primaryColor: "#0066FF" // Hard-coded
+}
+```
+
+**Solução Whitelabel**:
+```typescript
+// ✅ WHITELABEL: Branding dinâmico por tenant
+export function useBranding() {
+  const { tenantId } = useAuth()
+
+  const { data: tenant } = useQuery({
+    queryKey: ['tenant', tenantId],
+    queryFn: () => api.get(`/tenants/${tenantId}`)
+  })
+
+  return {
+    name: tenant?.settings?.business_name || "ImóvelHub",
+    logo: tenant?.settings?.logo_url || "/logo-placeholder.svg",
+    primaryColor: tenant?.settings?.primary_color || "#0066FF",
+    secondaryColor: tenant?.settings?.secondary_color || "#E8EAED",
+    accentColor: tenant?.settings?.accent_color || "#22C55E",
+    contactEmail: tenant?.settings?.contact_email,
+    contactPhone: tenant?.settings?.contact_phone,
+  }
+}
+```
+
+### 24.5 CSS Variables Dinâmicas
+
+**Implementação em layout.tsx**:
+
+```tsx
+// app/layout.tsx
+export default async function RootLayout({ children }) {
+  const tenant = await fetchTenant() // SSR
+
+  const style = {
+    '--color-primary': tenant.settings?.primary_color || '#0066FF',
+    '--color-secondary': tenant.settings?.secondary_color || '#E8EAED',
+    '--color-accent': tenant.settings?.accent_color || '#22C55E',
+  }
+
+  return (
+    <html lang="pt-BR" style={style}>
+      <head>
+        <link rel="icon" href={tenant.settings?.favicon_url || "/favicon.svg"} />
+      </head>
+      <body className="font-sans">
+        {children}
+      </body>
+    </html>
+  )
+}
+```
+
+**Tailwind configurado para CSS Variables**:
+
+```typescript
+// tailwind.config.ts
+export default {
+  theme: {
+    extend: {
+      colors: {
+        primary: 'var(--color-primary)',     // ✅ Dinâmico
+        secondary: 'var(--color-secondary)', // ✅ Dinâmico
+        accent: 'var(--color-accent)',       // ✅ Dinâmico
+      },
+    },
+  },
+}
+```
+
+### 24.6 Upload de Logo (Backend)
+
+**Endpoint para upload de logo**:
+
+```go
+// POST /api/v1/tenants/{tenantId}/logo
+func (h *TenantHandler) UploadLogo(c *gin.Context) {
+    tenantID := c.Param("tenantId")
+
+    // 1. Validar permissão (apenas admin do tenant)
+    if !h.isAdmin(c, tenantID) {
+        c.JSON(403, gin.H{"error": "Forbidden"})
+        return
+    }
+
+    // 2. Upload para GCS
+    file, _ := c.FormFile("logo")
+    gcsPath := fmt.Sprintf("tenants/%s/branding/logo.png", tenantID)
+    logoURL, err := h.storage.Upload(c, gcsPath, file)
+
+    // 3. Atualizar Tenant.settings.logo_url
+    err = h.db.Collection("tenants").Doc(tenantID).Update(c, []firestore.Update{
+        {Path: "settings.logo_url", Value: logoURL},
+        {Path: "updated_at", Value: time.Now()},
+    })
+
+    c.JSON(200, gin.H{"logo_url": logoURL})
+}
+```
+
+### 24.7 UI de Configuração de Branding (Admin)
+
+**Página: /app/configuracoes/branding**
+
+```tsx
+'use client'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+const brandingSchema = z.object({
+  business_name: z.string().min(3, 'Mínimo 3 caracteres'),
+  tagline: z.string().optional(),
+  primary_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Cor inválida'),
+  secondary_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Cor inválida'),
+  accent_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Cor inválida'),
+  contact_email: z.string().email(),
+  contact_phone: z.string().min(10),
+})
+
+export default function BrandingSettingsPage() {
+  const { tenantId } = useAuth()
+  const queryClient = useQueryClient()
+
+  const { data: tenant } = useQuery({
+    queryKey: ['tenant', tenantId],
+    queryFn: () => api.get(`/tenants/${tenantId}`)
+  })
+
+  const form = useForm({
+    resolver: zodResolver(brandingSchema),
+    defaultValues: tenant?.settings || {}
+  })
+
+  const updateBranding = useMutation({
+    mutationFn: (data) => api.patch(`/tenants/${tenantId}`, { settings: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['tenant', tenantId])
+      toast.success('Branding atualizado!')
+    }
+  })
+
+  const uploadLogo = useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('logo', file)
+      return api.post(`/tenants/${tenantId}/logo`, formData)
+    },
+    onSuccess: (data) => {
+      form.setValue('logo_url', data.logo_url)
+      toast.success('Logo atualizado!')
+    }
+  })
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-6">Configuração de Marca</h1>
+
+      <form onSubmit={form.handleSubmit(updateBranding.mutate)} className="space-y-6">
+        {/* Logo Upload */}
+        <div>
+          <Label>Logo da Empresa</Label>
+          <div className="mt-2 flex items-center gap-4">
+            {tenant?.settings?.logo_url && (
+              <img src={tenant.settings.logo_url} alt="Logo" className="h-16 w-16 object-contain" />
+            )}
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) uploadLogo.mutate(file)
+              }}
+            />
+          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            PNG ou SVG recomendado. Tamanho ideal: 512x512px
+          </p>
+        </div>
+
+        {/* Nome da Empresa */}
+        <div>
+          <Label htmlFor="business_name">Nome da Imobiliária</Label>
+          <Input id="business_name" {...form.register('business_name')} />
+          {form.formState.errors.business_name && (
+            <p className="text-sm text-red-600">{form.formState.errors.business_name.message}</p>
+          )}
+        </div>
+
+        {/* Tagline */}
+        <div>
+          <Label htmlFor="tagline">Slogan (opcional)</Label>
+          <Input id="tagline" {...form.register('tagline')} placeholder="Seu lar dos sonhos" />
+        </div>
+
+        {/* Cores */}
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <Label htmlFor="primary_color">Cor Primária</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                id="primary_color"
+                {...form.register('primary_color')}
+                className="w-16 h-10"
+              />
+              <Input {...form.register('primary_color')} placeholder="#0066FF" />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="secondary_color">Cor Secundária</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                id="secondary_color"
+                {...form.register('secondary_color')}
+                className="w-16 h-10"
+              />
+              <Input {...form.register('secondary_color')} placeholder="#E8EAED" />
+            </div>
+          </div>
+
+          <div>
+            <Label htmlFor="accent_color">Cor de Destaque</Label>
+            <div className="flex gap-2">
+              <Input
+                type="color"
+                id="accent_color"
+                {...form.register('accent_color')}
+                className="w-16 h-10"
+              />
+              <Input {...form.register('accent_color')} placeholder="#22C55E" />
+            </div>
+          </div>
+        </div>
+
+        {/* Contato */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="contact_email">Email de Contato</Label>
+            <Input type="email" id="contact_email" {...form.register('contact_email')} />
+          </div>
+
+          <div>
+            <Label htmlFor="contact_phone">Telefone de Contato</Label>
+            <Input id="contact_phone" {...form.register('contact_phone')} placeholder="+55 11 99999-9999" />
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="p-4 border rounded-lg bg-gray-50">
+          <p className="text-sm font-medium mb-2">Preview:</p>
+          <div className="flex items-center gap-3 p-4 bg-white rounded" style={{
+            backgroundColor: 'white',
+            borderLeft: `4px solid ${form.watch('primary_color') || '#0066FF'}`
+          }}>
+            {tenant?.settings?.logo_url && (
+              <img src={tenant.settings.logo_url} alt="Logo" className="h-10" />
+            )}
+            <div>
+              <p className="font-bold">{form.watch('business_name') || 'Sua Imobiliária'}</p>
+              <p className="text-sm text-gray-600">{form.watch('tagline') || 'Seu slogan aqui'}</p>
+            </div>
+          </div>
+        </div>
+
+        <Button type="submit" size="lg" className="w-full" disabled={updateBranding.isPending}>
+          {updateBranding.isPending ? 'Salvando...' : 'Salvar Alterações'}
+        </Button>
+      </form>
+    </div>
+  )
+}
+```
+
+### 24.8 Domínios Customizados (MVP+2 - Opcional)
+
+**Conceito**: Cada tenant pode ter seu próprio domínio (ex: `imobiliariaprimavera.com.br`).
+
+**Backend - Middleware**:
+```go
+func TenantDomainMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        host := c.Request.Host
+
+        // 1. Cache: verificar se domínio está em cache
+        if tenantID, ok := domainCache.Get(host); ok {
+            c.Set("tenant_id", tenantID)
+            c.Next()
+            return
+        }
+
+        // 2. Query: buscar tenant por custom_domain
+        var tenant Tenant
+        err := db.Collection("tenants").
+            Where("settings.custom_domain", "==", host).
+            Limit(1).
+            Documents(c).
+            Next().
+            DataTo(&tenant)
+
+        if err == nil {
+            // 3. Cache: armazenar por 5 minutos
+            domainCache.Set(host, tenant.ID, 5*time.Minute)
+            c.Set("tenant_id", tenant.ID)
+        }
+
+        c.Next()
+    }
+}
+```
+
+**Frontend - Next.js Middleware**:
+```typescript
+// middleware.ts
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function middleware(request: NextRequest) {
+  const host = request.headers.get('host') || ''
+
+  // 1. Verificar se é domínio customizado
+  if (!host.includes('imovelhub.com')) {
+    // 2. Fetch tenant by domain (com cache)
+    const tenant = await fetchTenantByDomain(host)
+
+    if (tenant) {
+      // 3. Inject tenant_id no header
+      const headers = new Headers(request.headers)
+      headers.set('x-tenant-id', tenant.id)
+
+      return NextResponse.rewrite(request.url, { headers })
+    }
+  }
+
+  return NextResponse.next()
+}
+```
+
+**Configuração DNS**:
+```
+# Cliente configura em seu provedor de DNS:
+CNAME  www.imobiliariaprimavera.com.br  →  cname.vercel-dns.com
+```
+
+**Vercel**:
+```bash
+# Adicionar domínio via Vercel CLI
+vercel domains add imobiliariaprimavera.com.br --project=imovel-hub
+```
+
+### 24.9 Estimativa de Esforço
+
+**MVP+1 (Whitelabel Básico) - 13 horas**:
+- ✅ Expandir Tenant.settings com campos de branding (3h)
+- ✅ Refatorar frontend para `useBranding()` hook (5h)
+- ✅ CSS Variables dinâmicas (4h)
+- ✅ UI de configuração /app/configuracoes/branding (8h)
+- ✅ Endpoint de upload de logo (3h)
+
+**MVP+2 (Domínios Customizados) - 10 horas**:
+- TenantDomainMiddleware (backend) - 4h
+- Next.js middleware (frontend) - 3h
+- Configuração Vercel multi-domain - 2h
+- Documentação DNS - 1h
+
+**Total**: 23 horas (~3 dias de desenvolvimento)
+
+### 24.10 Benefícios de Whitelabel
+
+**Para os Tenants (Imobiliárias)**:
+- ✅ Identidade visual própria (não parece "plataforma compartilhada")
+- ✅ Fortalecimento da marca
+- ✅ Domínio customizado (opcional) aumenta credibilidade
+- ✅ SEO independente por domínio
+
+**Para a Plataforma**:
+- ✅ Precificação premium (+30-50% por whitelabel)
+- ✅ Redução de churn (cliente se sente "dono")
+- ✅ Diferencial competitivo forte
+- ✅ Facilita onboarding (5 minutos para configurar marca)
+
+**ROI Estimado**:
+- Investimento: R$ 2.300 (23h × R$ 100/h)
+- Retorno: 10 tenants × R$ 500/mês (whitelabel premium) = R$ 5.000/mês
+- ROI: 2.2x no primeiro mês, 26x no primeiro ano
+
+### 24.11 Checklist de Implementação
+
+**Backend**:
+- [ ] Expandir `Tenant.settings` com 10+ campos de branding
+- [ ] Criar endpoint `POST /api/v1/tenants/{id}/logo`
+- [ ] Criar endpoint `PATCH /api/v1/tenants/{id}` (já existe, validar campos)
+- [ ] Middleware `TenantDomainMiddleware` (MVP+2)
+- [ ] Query otimizada `FindTenantByDomain()` (MVP+2)
+
+**Frontend**:
+- [ ] Criar hook `useBranding()` dinâmico
+- [ ] Refatorar todos os componentes que usam `lib/branding.ts` estático
+- [ ] Implementar CSS Variables em `app/layout.tsx`
+- [ ] Atualizar `tailwind.config.ts` para usar variáveis
+- [ ] Criar página `/app/configuracoes/branding`
+- [ ] Componente `ColorPicker`
+- [ ] Upload de logo com preview
+- [ ] Next.js middleware para domínios customizados (MVP+2)
+
+**Infraestrutura**:
+- [ ] Configurar Vercel para multi-domain (MVP+2)
+- [ ] Documentar processo de configuração DNS
+- [ ] CDN para logos (GCS já suporta)
+
+**QA**:
+- [ ] Testes end-to-end de branding dinâmico
+- [ ] Validar CSS Variables em diferentes browsers
+- [ ] Testar upload de logo (PNG, SVG, JPEG)
+- [ ] Validar domínio customizado (MVP+2)
+
+## 25. Conclusão
+MVP sólido, governável, multi-tenant, **LGPD-compliant**, com **design moderno**, **otimização de mídia por IA**, **SEO 100%**, e **preparado para whitelabel** no ecossistema Google Cloud.

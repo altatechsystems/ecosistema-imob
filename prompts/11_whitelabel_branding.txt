@@ -1,0 +1,1251 @@
+Você é um engenheiro fullstack sênior especializado em Next.js, TypeScript e Go.
+Implemente a funcionalidade de **WHITELABEL (Branding Personalizado por Tenant)** conforme AI_DEV_DIRECTIVE.md Seção 24.
+
+IMPORTANTE:
+- Executar APÓS PROMPT 01 (Foundation), PROMPT 04 (Frontend Public) e PROMPT 09 (Auth/Multi-tenancy)
+- NÃO criar domínios customizados no MVP (isso é MVP+2)
+- Focar em branding dinâmico (logo, cores, nome)
+- Manter compatibilidade com código existente
+
+========================
+🎯 OBJETIVO
+========================
+
+Permitir que cada tenant (imobiliária) customize:
+- ✅ Logo da empresa
+- ✅ Cores da marca (primária, secundária, destaque)
+- ✅ Nome da empresa e slogan
+- ✅ Informações de contato (email, telefone)
+- ✅ Favicon personalizado
+- ❌ Domínio customizado (MVP+2 - NÃO implementar agora)
+
+========================
+📊 STATUS ATUAL (MVP)
+========================
+
+**Backend**:
+✅ Tenant existe com `settings map[string]interface{}`
+✅ Endpoint PATCH /api/v1/tenants/{tenantId} existe
+⚠️ `settings` tem apenas 3 campos (whatsapp_default, business_name, logo_url)
+❌ Sem endpoint de upload de logo
+
+**Frontend**:
+❌ Branding hardcoded em `lib/branding.ts` com env vars
+❌ Cores hardcoded em `tailwind.config.ts`
+❌ Logo sempre renderiza placeholder
+❌ Sem UI de configuração de branding
+
+========================
+PARTE 1: BACKEND (Go + Firestore)
+========================
+
+### 1.1 Expandir Tenant.settings
+
+**Arquivo**: `internal/models/tenant.go`
+
+```go
+package models
+
+import (
+    "time"
+)
+
+type Tenant struct {
+    ID        string         `firestore:"-" json:"id"`
+    Name      string         `firestore:"name" json:"name"`
+    Slug      string         `firestore:"slug" json:"slug"`
+    Status    TenantStatus   `firestore:"status" json:"status"`
+    Settings  TenantSettings `firestore:"settings" json:"settings"` // ⚠️ Agora é struct, não map
+    CreatedAt time.Time      `firestore:"created_at" json:"created_at"`
+    UpdatedAt time.Time      `firestore:"updated_at" json:"updated_at"`
+}
+
+type TenantStatus string
+
+const (
+    TenantStatusActive   TenantStatus = "active"
+    TenantStatusInactive TenantStatus = "inactive"
+    TenantStatusSuspended TenantStatus = "suspended"
+)
+
+// TenantSettings: configurações de branding e contato
+type TenantSettings struct {
+    // Contato
+    WhatsAppDefault string `json:"whatsapp_default" firestore:"whatsapp_default"`
+    ContactEmail    string `json:"contact_email" firestore:"contact_email"`
+    ContactPhone    string `json:"contact_phone" firestore:"contact_phone"`
+
+    // Branding Visual
+    BusinessName    string `json:"business_name" firestore:"business_name"`
+    Tagline         string `json:"tagline,omitempty" firestore:"tagline,omitempty"`
+    LogoURL         string `json:"logo_url,omitempty" firestore:"logo_url,omitempty"`
+    FaviconURL      string `json:"favicon_url,omitempty" firestore:"favicon_url,omitempty"`
+
+    // Paleta de Cores (formato hex: "#0066FF")
+    PrimaryColor    string `json:"primary_color" firestore:"primary_color"`       // Cor principal
+    SecondaryColor  string `json:"secondary_color" firestore:"secondary_color"`   // Cor secundária
+    AccentColor     string `json:"accent_color" firestore:"accent_color"`         // Cor de destaque
+
+    // SEO
+    MetaDescription string `json:"meta_description,omitempty" firestore:"meta_description,omitempty"`
+    MetaKeywords    string `json:"meta_keywords,omitempty" firestore:"meta_keywords,omitempty"`
+
+    // Domínio Customizado (MVP+2 - NÃO implementar agora)
+    // CustomDomain string `json:"custom_domain,omitempty" firestore:"custom_domain,omitempty"`
+}
+
+// DefaultTenantSettings retorna configurações padrão
+func DefaultTenantSettings() TenantSettings {
+    return TenantSettings{
+        BusinessName:   "ImóvelHub",
+        PrimaryColor:   "#0066FF", // Azul
+        SecondaryColor: "#E8EAED", // Cinza
+        AccentColor:    "#22C55E", // Verde
+    }
+}
+
+// Validate valida campos obrigatórios e formatos
+func (s *TenantSettings) Validate() error {
+    if s.BusinessName == "" {
+        return errors.New("business_name is required")
+    }
+
+    // Validar formato de cores (hex: #RRGGBB)
+    hexColorRegex := regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+    if !hexColorRegex.MatchString(s.PrimaryColor) {
+        return errors.New("primary_color must be in hex format (#RRGGBB)")
+    }
+    if !hexColorRegex.MatchString(s.SecondaryColor) {
+        return errors.New("secondary_color must be in hex format (#RRGGBB)")
+    }
+    if !hexColorRegex.MatchString(s.AccentColor) {
+        return errors.New("accent_color must be in hex format (#RRGGBB)")
+    }
+
+    // Validar email (se fornecido)
+    if s.ContactEmail != "" {
+        emailRegex := regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
+        if !emailRegex.MatchString(s.ContactEmail) {
+            return errors.New("contact_email is invalid")
+        }
+    }
+
+    return nil
+}
+```
+
+### 1.2 Endpoint de Upload de Logo
+
+**Arquivo**: `internal/handlers/tenant_handler.go`
+
+```go
+package handlers
+
+import (
+    "context"
+    "fmt"
+    "net/http"
+    "path/filepath"
+    "time"
+
+    "cloud.google.com/go/firestore"
+    "cloud.google.com/go/storage"
+    "github.com/gin-gonic/gin"
+)
+
+type TenantHandler struct {
+    db      *firestore.Client
+    storage *storage.Client
+    bucket  string
+}
+
+func NewTenantHandler(db *firestore.Client, storage *storage.Client, bucket string) *TenantHandler {
+    return &TenantHandler{
+        db:      db,
+        storage: storage,
+        bucket:  bucket,
+    }
+}
+
+// POST /api/v1/tenants/{tenantId}/logo
+func (h *TenantHandler) UploadLogo(c *gin.Context) {
+    tenantID := c.Param("tenantId")
+
+    // 1. Validar permissão (apenas admin do tenant)
+    claimsTenantID, _ := c.Get("tenant_id")
+    claimsRole, _ := c.Get("role")
+
+    if claimsTenantID != tenantID || claimsRole != "admin" {
+        c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: only tenant admin can upload logo"})
+        return
+    }
+
+    // 2. Receber arquivo
+    file, err := c.FormFile("logo")
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "No file provided"})
+        return
+    }
+
+    // 3. Validar tipo de arquivo (apenas imagens)
+    ext := filepath.Ext(file.Filename)
+    allowedExts := map[string]bool{".png": true, ".jpg": true, ".jpeg": true, ".svg": true, ".webp": true}
+    if !allowedExts[ext] {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Allowed: png, jpg, jpeg, svg, webp"})
+        return
+    }
+
+    // 4. Validar tamanho (máximo 5MB)
+    if file.Size > 5*1024*1024 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "File too large. Max size: 5MB"})
+        return
+    }
+
+    // 5. Upload para GCS
+    ctx := context.Background()
+    gcsPath := fmt.Sprintf("tenants/%s/branding/logo%s", tenantID, ext)
+
+    src, err := file.Open()
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+        return
+    }
+    defer src.Close()
+
+    obj := h.storage.Bucket(h.bucket).Object(gcsPath)
+    writer := obj.NewWriter(ctx)
+    writer.ContentType = file.Header.Get("Content-Type")
+    writer.CacheControl = "public, max-age=31536000" // Cache por 1 ano
+
+    if _, err := io.Copy(writer, src); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload file"})
+        return
+    }
+
+    if err := writer.Close(); err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to finalize upload"})
+        return
+    }
+
+    // 6. Gerar URL pública
+    logoURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", h.bucket, gcsPath)
+
+    // 7. Atualizar Tenant.settings.logo_url no Firestore
+    _, err = h.db.Collection("tenants").Doc(tenantID).Update(ctx, []firestore.Update{
+        {Path: "settings.logo_url", Value: logoURL},
+        {Path: "updated_at", Value: time.Now()},
+    })
+
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tenant"})
+        return
+    }
+
+    // 8. Log de auditoria
+    h.logActivity(ctx, tenantID, "tenant_logo_uploaded", map[string]interface{}{
+        "logo_url": logoURL,
+    })
+
+    c.JSON(http.StatusOK, gin.H{
+        "logo_url": logoURL,
+        "message":  "Logo uploaded successfully",
+    })
+}
+
+// POST /api/v1/tenants/{tenantId}/favicon
+func (h *TenantHandler) UploadFavicon(c *gin.Context) {
+    tenantID := c.Param("tenantId")
+
+    // Mesma lógica de UploadLogo, mas com path "tenants/{tenantId}/branding/favicon.ico"
+    // e atualiza settings.favicon_url
+    // ...
+}
+
+// PATCH /api/v1/tenants/{tenantId}
+func (h *TenantHandler) UpdateTenant(c *gin.Context) {
+    tenantID := c.Param("tenantId")
+
+    // 1. Validar permissão (apenas admin do tenant)
+    claimsTenantID, _ := c.Get("tenant_id")
+    claimsRole, _ := c.Get("role")
+
+    if claimsTenantID != tenantID || claimsRole != "admin" {
+        c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+        return
+    }
+
+    // 2. Parse request body
+    var req struct {
+        Settings models.TenantSettings `json:"settings"`
+    }
+
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    // 3. Validar settings
+    if err := req.Settings.Validate(); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    // 4. Atualizar Firestore
+    ctx := context.Background()
+    updates := []firestore.Update{
+        {Path: "settings", Value: req.Settings},
+        {Path: "updated_at", Value: time.Now()},
+    }
+
+    _, err := h.db.Collection("tenants").Doc(tenantID).Update(ctx, updates)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update tenant"})
+        return
+    }
+
+    // 5. Log de auditoria
+    h.logActivity(ctx, tenantID, "tenant_settings_updated", map[string]interface{}{
+        "settings": req.Settings,
+    })
+
+    c.JSON(http.StatusOK, gin.H{
+        "message": "Tenant updated successfully",
+        "settings": req.Settings,
+    })
+}
+
+// Helper: log de auditoria
+func (h *TenantHandler) logActivity(ctx context.Context, tenantID string, eventType string, metadata map[string]interface{}) {
+    // Criar ActivityLog (seguindo padrão do PROMPT 01)
+    // ...
+}
+```
+
+### 1.3 Rotas (Gin)
+
+**Arquivo**: `cmd/api/main.go`
+
+```go
+package main
+
+import (
+    "github.com/gin-gonic/gin"
+    "internal/handlers"
+    "internal/middleware"
+)
+
+func setupRoutes(r *gin.Engine, handlers *handlers.Handlers) {
+    api := r.Group("/api/v1")
+    api.Use(middleware.TenantIsolationMiddleware())
+
+    // ... outras rotas
+
+    // Tenant routes (com auth)
+    tenants := api.Group("/tenants")
+    tenants.Use(middleware.AuthMiddleware())
+    {
+        tenants.GET("/:tenantId", handlers.Tenant.GetTenant)
+        tenants.PATCH("/:tenantId", handlers.Tenant.UpdateTenant)
+        tenants.POST("/:tenantId/logo", handlers.Tenant.UploadLogo)      // ⭐ NOVO
+        tenants.POST("/:tenantId/favicon", handlers.Tenant.UploadFavicon) // ⭐ NOVO
+    }
+}
+```
+
+========================
+PARTE 2: FRONTEND (Next.js + TypeScript)
+========================
+
+### 2.1 Refatorar lib/branding.ts
+
+**Arquivo**: `lib/branding.ts`
+
+```typescript
+// ❌ REMOVER CÓDIGO ANTIGO:
+// export const branding = { ... }
+
+// ✅ NOVO: Hook dinâmico
+'use client'
+import { useAuth } from '@/contexts/AuthContext'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api-client'
+
+interface BrandingConfig {
+  name: string
+  tagline: string
+  logo: string
+  favicon: string
+  primaryColor: string
+  secondaryColor: string
+  accentColor: string
+  contactEmail: string
+  contactPhone: string
+  metaDescription: string
+}
+
+export function useBranding(): BrandingConfig {
+  const { tenantId } = useAuth()
+
+  const { data: tenant } = useQuery({
+    queryKey: ['tenant', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null
+      const response = await api.get(`/tenants/${tenantId}`)
+      return response.data
+    },
+    enabled: !!tenantId,
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  })
+
+  return {
+    name: tenant?.settings?.business_name || "ImóvelHub",
+    tagline: tenant?.settings?.tagline || "Marketplace Imobiliário",
+    logo: tenant?.settings?.logo_url || "/logo-placeholder.svg",
+    favicon: tenant?.settings?.favicon_url || "/favicon.svg",
+    primaryColor: tenant?.settings?.primary_color || "#0066FF",
+    secondaryColor: tenant?.settings?.secondary_color || "#E8EAED",
+    accentColor: tenant?.settings?.accent_color || "#22C55E",
+    contactEmail: tenant?.settings?.contact_email || "contato@imovelhub.com.br",
+    contactPhone: tenant?.settings?.contact_phone || "+55 11 99999-9999",
+    metaDescription: tenant?.settings?.meta_description || "Encontre seu imóvel ideal",
+  }
+}
+
+// Helper para SSR (Server Components)
+export async function fetchTenantBranding(tenantId: string): Promise<BrandingConfig> {
+  const response = await fetch(`${process.env.API_URL}/api/v1/tenants/${tenantId}`, {
+    headers: {
+      'Authorization': `Bearer ${process.env.API_KEY}`,
+      'X-Tenant-ID': tenantId,
+    },
+    next: { revalidate: 300 }, // Cache por 5 minutos
+  })
+
+  const tenant = await response.json()
+
+  return {
+    name: tenant?.settings?.business_name || "ImóvelHub",
+    tagline: tenant?.settings?.tagline || "Marketplace Imobiliário",
+    logo: tenant?.settings?.logo_url || "/logo-placeholder.svg",
+    favicon: tenant?.settings?.favicon_url || "/favicon.svg",
+    primaryColor: tenant?.settings?.primary_color || "#0066FF",
+    secondaryColor: tenant?.settings?.secondary_color || "#E8EAED",
+    accentColor: tenant?.settings?.accent_color || "#22C55E",
+    contactEmail: tenant?.settings?.contact_email || "contato@imovelhub.com.br",
+    contactPhone: tenant?.settings?.contact_phone || "+55 11 99999-9999",
+    metaDescription: tenant?.settings?.meta_description || "Encontre seu imóvel ideal",
+  }
+}
+```
+
+### 2.2 CSS Variables Dinâmicas
+
+**Arquivo**: `app/layout.tsx`
+
+```tsx
+import { fetchTenantBranding } from '@/lib/branding'
+import { Inter, Poppins } from 'next/font/google'
+import './globals.css'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+  variable: '--font-inter',
+})
+
+const poppins = Poppins({
+  weight: ['400', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+  variable: '--font-poppins',
+})
+
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  // Obter tenantId do cookie ou header (implementar getTenantId())
+  const tenantId = await getTenantIdFromRequest()
+  const branding = await fetchTenantBranding(tenantId)
+
+  // Injetar CSS Variables
+  const style = {
+    '--color-primary': branding.primaryColor,
+    '--color-secondary': branding.secondaryColor,
+    '--color-accent': branding.accentColor,
+  } as React.CSSProperties
+
+  return (
+    <html lang="pt-BR" className={`${inter.variable} ${poppins.variable}`} style={style}>
+      <head>
+        <link rel="icon" href={branding.favicon} />
+        <link rel="preconnect" href="https://storage.googleapis.com" />
+        <link rel="dns-prefetch" href="https://storage.googleapis.com" />
+      </head>
+      <body className="font-sans">
+        {children}
+      </body>
+    </html>
+  )
+}
+
+// Helper para obter tenant_id do request
+async function getTenantIdFromRequest(): Promise<string> {
+  // Implementar lógica para extrair tenant_id de cookie/header
+  // Por enquanto, retornar valor default
+  return process.env.DEFAULT_TENANT_ID || "tenant1"
+}
+```
+
+**Arquivo**: `app/globals.css`
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Cores dinâmicas (injetadas via layout.tsx) */
+    --color-primary: #0066FF;
+    --color-secondary: #E8EAED;
+    --color-accent: #22C55E;
+
+    /* Conversão para HSL (Tailwind precisa disso) */
+    --primary: 214 100% 50%;      /* equivalente a #0066FF */
+    --secondary: 220 13% 91%;     /* equivalente a #E8EAED */
+    --accent: 142 71% 45%;        /* equivalente a #22C55E */
+  }
+}
+```
+
+**Arquivo**: `tailwind.config.ts`
+
+```typescript
+import type { Config } from 'tailwindcss'
+
+const config: Config = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // ✅ Cores dinâmicas via CSS Variables
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(0, 0%, 100%)',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(220, 9%, 46%)',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(0, 0%, 100%)',
+        },
+      },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'sans-serif'],
+        heading: ['var(--font-poppins)', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+
+export default config
+```
+
+### 2.3 Componente Logo Dinâmico
+
+**Arquivo**: `components/Logo.tsx`
+
+```tsx
+'use client'
+import { useBranding } from '@/lib/branding'
+import Image from 'next/image'
+import { Home } from 'lucide-react'
+
+interface LogoProps {
+  variant?: 'full' | 'icon'
+  className?: string
+}
+
+export function Logo({ variant = 'full', className = '' }: LogoProps) {
+  const branding = useBranding()
+
+  if (variant === 'icon') {
+    return (
+      <div className={`w-10 h-10 bg-primary rounded-lg flex items-center justify-center ${className}`}>
+        {branding.logo !== '/logo-placeholder.svg' ? (
+          <Image src={branding.logo} alt={branding.name} width={32} height={32} className="object-contain" />
+        ) : (
+          <Home className="w-6 h-6 text-primary-foreground" />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className={`flex items-center gap-3 ${className}`}>
+      <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+        {branding.logo !== '/logo-placeholder.svg' ? (
+          <Image src={branding.logo} alt={branding.name} width={32} height={32} className="object-contain" />
+        ) : (
+          <Home className="w-6 h-6 text-primary-foreground" />
+        )}
+      </div>
+      <div>
+        <span className="text-xl font-bold font-heading">{branding.name}</span>
+        {branding.tagline && (
+          <p className="text-xs text-gray-600">{branding.tagline}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+### 2.4 Página de Configuração de Branding
+
+**Arquivo**: `app/(private)/app/configuracoes/branding/page.tsx`
+
+```tsx
+'use client'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '@/contexts/AuthContext'
+import { api } from '@/lib/api-client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+import { useState } from 'react'
+import Image from 'next/image'
+
+const brandingSchema = z.object({
+  business_name: z.string().min(3, 'Mínimo 3 caracteres'),
+  tagline: z.string().optional(),
+  primary_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Formato inválido (#RRGGBB)'),
+  secondary_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Formato inválido (#RRGGBB)'),
+  accent_color: z.string().regex(/^#[0-9A-F]{6}$/i, 'Formato inválido (#RRGGBB)'),
+  contact_email: z.string().email('Email inválido'),
+  contact_phone: z.string().min(10, 'Telefone inválido'),
+  meta_description: z.string().max(155, 'Máximo 155 caracteres').optional(),
+})
+
+type BrandingFormData = z.infer<typeof brandingSchema>
+
+export default function BrandingSettingsPage() {
+  const { tenantId } = useAuth()
+  const queryClient = useQueryClient()
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+
+  const { data: tenant, isLoading } = useQuery({
+    queryKey: ['tenant', tenantId],
+    queryFn: () => api.get(`/tenants/${tenantId}`).then(res => res.data),
+  })
+
+  const form = useForm<BrandingFormData>({
+    resolver: zodResolver(brandingSchema),
+    defaultValues: {
+      business_name: tenant?.settings?.business_name || '',
+      tagline: tenant?.settings?.tagline || '',
+      primary_color: tenant?.settings?.primary_color || '#0066FF',
+      secondary_color: tenant?.settings?.secondary_color || '#E8EAED',
+      accent_color: tenant?.settings?.accent_color || '#22C55E',
+      contact_email: tenant?.settings?.contact_email || '',
+      contact_phone: tenant?.settings?.contact_phone || '',
+      meta_description: tenant?.settings?.meta_description || '',
+    },
+  })
+
+  const updateBranding = useMutation({
+    mutationFn: (data: BrandingFormData) =>
+      api.patch(`/tenants/${tenantId}`, { settings: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tenant', tenantId] })
+      toast.success('Branding atualizado com sucesso!')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao atualizar branding')
+    },
+  })
+
+  const uploadLogo = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData()
+      formData.append('logo', file)
+      const response = await api.post(`/tenants/${tenantId}/logo`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      return response.data
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['tenant', tenantId] })
+      setLogoPreview(data.logo_url)
+      toast.success('Logo atualizado com sucesso!')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Erro ao fazer upload do logo')
+    },
+  })
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validações client-side
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Máximo: 5MB')
+      return
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Formato inválido. Permitidos: PNG, JPG, SVG, WebP')
+      return
+    }
+
+    // Preview local
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+
+    // Upload
+    uploadLogo.mutate(file)
+  }
+
+  if (isLoading) {
+    return <div className="p-6">Carregando...</div>
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold font-heading">Configuração de Marca</h1>
+        <p className="text-gray-600 mt-2">
+          Personalize a identidade visual da sua imobiliária
+        </p>
+      </div>
+
+      <form onSubmit={form.handleSubmit((data) => updateBranding.mutate(data))} className="space-y-8">
+        {/* Logo Upload */}
+        <div className="bg-white p-6 rounded-lg border">
+          <h2 className="text-lg font-semibold mb-4">Logo da Empresa</h2>
+          <div className="flex items-start gap-6">
+            <div className="flex-shrink-0">
+              {(logoPreview || tenant?.settings?.logo_url) && (
+                <div className="w-32 h-32 border rounded-lg p-2 bg-gray-50 flex items-center justify-center">
+                  <Image
+                    src={logoPreview || tenant.settings.logo_url}
+                    alt="Logo"
+                    width={112}
+                    height={112}
+                    className="object-contain max-w-full max-h-full"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <Input
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/svg+xml,image/webp"
+                onChange={handleLogoChange}
+                disabled={uploadLogo.isPending}
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                Formatos: PNG, JPG, SVG, WebP | Tamanho ideal: 512x512px | Máximo: 5MB
+              </p>
+              {uploadLogo.isPending && (
+                <p className="text-sm text-primary mt-2">Enviando...</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Informações Básicas */}
+        <div className="bg-white p-6 rounded-lg border space-y-4">
+          <h2 className="text-lg font-semibold mb-4">Informações Básicas</h2>
+
+          <div>
+            <Label htmlFor="business_name">Nome da Imobiliária *</Label>
+            <Input
+              id="business_name"
+              {...form.register('business_name')}
+              placeholder="Imobiliária Primavera"
+            />
+            {form.formState.errors.business_name && (
+              <p className="text-sm text-red-600 mt-1">
+                {form.formState.errors.business_name.message}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Label htmlFor="tagline">Slogan (opcional)</Label>
+            <Input
+              id="tagline"
+              {...form.register('tagline')}
+              placeholder="Seu lar dos sonhos"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="meta_description">Meta Description SEO (opcional)</Label>
+            <Input
+              id="meta_description"
+              {...form.register('meta_description')}
+              placeholder="Encontre seu imóvel ideal com a melhor imobiliária da região"
+              maxLength={155}
+            />
+            <p className="text-sm text-gray-500 mt-1">
+              Máximo 155 caracteres. Aparece nos resultados do Google.
+            </p>
+          </div>
+        </div>
+
+        {/* Paleta de Cores */}
+        <div className="bg-white p-6 rounded-lg border space-y-4">
+          <h2 className="text-lg font-semibold mb-4">Paleta de Cores</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="primary_color">Cor Primária *</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="color"
+                  id="primary_color"
+                  {...form.register('primary_color')}
+                  className="w-20 h-10 p-1"
+                />
+                <Input
+                  {...form.register('primary_color')}
+                  placeholder="#0066FF"
+                  className="flex-1"
+                />
+              </div>
+              {form.formState.errors.primary_color && (
+                <p className="text-sm text-red-600 mt-1">
+                  {form.formState.errors.primary_color.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="secondary_color">Cor Secundária *</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="color"
+                  id="secondary_color"
+                  {...form.register('secondary_color')}
+                  className="w-20 h-10 p-1"
+                />
+                <Input
+                  {...form.register('secondary_color')}
+                  placeholder="#E8EAED"
+                  className="flex-1"
+                />
+              </div>
+              {form.formState.errors.secondary_color && (
+                <p className="text-sm text-red-600 mt-1">
+                  {form.formState.errors.secondary_color.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="accent_color">Cor de Destaque *</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="color"
+                  id="accent_color"
+                  {...form.register('accent_color')}
+                  className="w-20 h-10 p-1"
+                />
+                <Input
+                  {...form.register('accent_color')}
+                  placeholder="#22C55E"
+                  className="flex-1"
+                />
+              </div>
+              {form.formState.errors.accent_color && (
+                <p className="text-sm text-red-600 mt-1">
+                  {form.formState.errors.accent_color.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Contato */}
+        <div className="bg-white p-6 rounded-lg border space-y-4">
+          <h2 className="text-lg font-semibold mb-4">Informações de Contato</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="contact_email">Email de Contato *</Label>
+              <Input
+                type="email"
+                id="contact_email"
+                {...form.register('contact_email')}
+                placeholder="contato@imobiliaria.com.br"
+              />
+              {form.formState.errors.contact_email && (
+                <p className="text-sm text-red-600 mt-1">
+                  {form.formState.errors.contact_email.message}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="contact_phone">Telefone/WhatsApp *</Label>
+              <Input
+                id="contact_phone"
+                {...form.register('contact_phone')}
+                placeholder="+55 11 99999-9999"
+              />
+              {form.formState.errors.contact_phone && (
+                <p className="text-sm text-red-600 mt-1">
+                  {form.formState.errors.contact_phone.message}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="bg-gray-50 p-6 rounded-lg border">
+          <h2 className="text-lg font-semibold mb-4">Preview</h2>
+          <div
+            className="bg-white p-6 rounded-lg border-l-4"
+            style={{
+              borderLeftColor: form.watch('primary_color') || '#0066FF',
+            }}
+          >
+            <div className="flex items-center gap-4">
+              {(logoPreview || tenant?.settings?.logo_url) && (
+                <Image
+                  src={logoPreview || tenant.settings.logo_url}
+                  alt="Logo"
+                  width={64}
+                  height={64}
+                  className="object-contain"
+                />
+              )}
+              <div>
+                <h3 className="text-2xl font-bold" style={{ color: form.watch('primary_color') || '#0066FF' }}>
+                  {form.watch('business_name') || 'Nome da Imobiliária'}
+                </h3>
+                <p className="text-gray-600">
+                  {form.watch('tagline') || 'Slogan da imobiliária'}
+                </p>
+                <div className="flex gap-4 mt-2 text-sm text-gray-700">
+                  <span>📧 {form.watch('contact_email') || 'email@exemplo.com'}</span>
+                  <span>📱 {form.watch('contact_phone') || '+55 11 99999-9999'}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <div
+                className="w-16 h-16 rounded"
+                style={{ backgroundColor: form.watch('primary_color') || '#0066FF' }}
+                title="Cor Primária"
+              />
+              <div
+                className="w-16 h-16 rounded"
+                style={{ backgroundColor: form.watch('secondary_color') || '#E8EAED' }}
+                title="Cor Secundária"
+              />
+              <div
+                className="w-16 h-16 rounded"
+                style={{ backgroundColor: form.watch('accent_color') || '#22C55E' }}
+                title="Cor de Destaque"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Submit */}
+        <div className="flex justify-end gap-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => form.reset()}
+            disabled={updateBranding.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            size="lg"
+            disabled={updateBranding.isPending}
+          >
+            {updateBranding.isPending ? 'Salvando...' : 'Salvar Alterações'}
+          </Button>
+        </div>
+      </form>
+    </div>
+  )
+}
+```
+
+========================
+PARTE 3: MIGRAÇÃO DE COMPONENTES EXISTENTES
+========================
+
+### 3.1 Atualizar Componentes que usam branding estático
+
+**Componentes a refatorar**:
+1. `components/ui/logo-placeholder.tsx` → Usar `<Logo />` dinâmico
+2. Todas as ocorrências de `import { branding } from '@/lib/branding'` → Substituir por `useBranding()`
+3. Navbar/Header components → Usar `<Logo variant="full" />`
+4. Footer components → Usar `branding.contactEmail`, `branding.contactPhone`
+
+**Exemplo de migração**:
+
+```tsx
+// ❌ ANTES:
+import { branding } from '@/lib/branding'
+
+export function Header() {
+  return (
+    <header>
+      <h1>{branding.name}</h1> {/* Hard-coded */}
+    </header>
+  )
+}
+
+// ✅ DEPOIS:
+'use client'
+import { useBranding } from '@/lib/branding'
+import { Logo } from '@/components/Logo'
+
+export function Header() {
+  return (
+    <header>
+      <Logo variant="full" />
+    </header>
+  )
+}
+```
+
+========================
+PARTE 4: TESTES
+========================
+
+### 4.1 Backend Tests
+
+**Arquivo**: `internal/handlers/tenant_handler_test.go`
+
+```go
+package handlers
+
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+)
+
+func TestTenantSettings_Validate(t *testing.T) {
+    tests := []struct {
+        name        string
+        settings    TenantSettings
+        expectError bool
+    }{
+        {
+            name: "valid settings",
+            settings: TenantSettings{
+                BusinessName:   "Test Imobiliária",
+                PrimaryColor:   "#0066FF",
+                SecondaryColor: "#E8EAED",
+                AccentColor:    "#22C55E",
+                ContactEmail:   "test@example.com",
+            },
+            expectError: false,
+        },
+        {
+            name: "invalid hex color",
+            settings: TenantSettings{
+                BusinessName:   "Test",
+                PrimaryColor:   "blue", // ❌ Invalid
+                SecondaryColor: "#E8EAED",
+                AccentColor:    "#22C55E",
+            },
+            expectError: true,
+        },
+        {
+            name: "invalid email",
+            settings: TenantSettings{
+                BusinessName:   "Test",
+                PrimaryColor:   "#0066FF",
+                SecondaryColor: "#E8EAED",
+                AccentColor:    "#22C55E",
+                ContactEmail:   "not-an-email", // ❌ Invalid
+            },
+            expectError: true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := tt.settings.Validate()
+            if tt.expectError {
+                assert.Error(t, err)
+            } else {
+                assert.NoError(t, err)
+            }
+        })
+    }
+}
+```
+
+### 4.2 Frontend Tests
+
+**Arquivo**: `components/Logo.test.tsx`
+
+```tsx
+import { render, screen } from '@testing-library/react'
+import { Logo } from './Logo'
+import { useBranding } from '@/lib/branding'
+
+jest.mock('@/lib/branding')
+
+describe('Logo Component', () => {
+  it('renders custom logo when available', () => {
+    (useBranding as jest.Mock).mockReturnValue({
+      name: 'Imobiliária Teste',
+      logo: 'https://example.com/logo.png',
+    })
+
+    render(<Logo variant="full" />)
+
+    expect(screen.getByText('Imobiliária Teste')).toBeInTheDocument()
+    expect(screen.getByAltText('Imobiliária Teste')).toHaveAttribute(
+      'src',
+      expect.stringContaining('logo.png')
+    )
+  })
+
+  it('renders placeholder when logo not available', () => {
+    (useBranding as jest.Mock).mockReturnValue({
+      name: 'ImóvelHub',
+      logo: '/logo-placeholder.svg',
+    })
+
+    render(<Logo variant="icon" />)
+
+    // Deve renderizar ícone de fallback (Home)
+    expect(screen.getByRole('img', { hidden: true })).toBeInTheDocument()
+  })
+})
+```
+
+========================
+ENTREGA ESPERADA
+========================
+
+**Backend**:
+1. ✅ `internal/models/tenant.go` com `TenantSettings` struct expandida
+2. ✅ `internal/handlers/tenant_handler.go` com endpoints de upload de logo/favicon
+3. ✅ Rotas configuradas em `cmd/api/main.go`
+4. ✅ Validação de campos obrigatórios e formatos
+5. ✅ Testes unitários
+
+**Frontend**:
+6. ✅ `lib/branding.ts` refatorado com `useBranding()` hook
+7. ✅ `app/layout.tsx` com CSS Variables dinâmicas
+8. ✅ `tailwind.config.ts` usando `var(--color-*)`
+9. ✅ `app/globals.css` com variáveis CSS
+10. ✅ `components/Logo.tsx` dinâmico
+11. ✅ `app/(private)/app/configuracoes/branding/page.tsx` completo
+12. ✅ Migração de componentes existentes
+13. ✅ Testes de componentes
+
+**Documentação**:
+14. ✅ README com instruções de uso
+15. ✅ Exemplos de configuração de branding
+
+========================
+CRITÉRIO DE SUCESSO
+========================
+
+**Backend**:
+✅ POST /api/v1/tenants/{id}/logo aceita PNG, JPG, SVG, WebP (max 5MB)
+✅ PATCH /api/v1/tenants/{id} valida cores hex (#RRGGBB)
+✅ TenantSettings salvo corretamente no Firestore
+✅ Apenas admin do tenant pode atualizar branding
+
+**Frontend**:
+✅ Logo e cores mudam dinamicamente por tenant
+✅ CSS Variables aplicadas em todos os componentes
+✅ UI de configuração funcional com preview em tempo real
+✅ Upload de logo com validação client-side
+✅ Formulário valida campos obrigatórios (Zod)
+
+**UX**:
+✅ Preview ao vivo das mudanças de cor
+✅ Feedback visual durante upload (loading state)
+✅ Mensagens de erro claras
+✅ Responsivo (mobile-first)
+
+**Performance**:
+✅ Cache de tenant (5 minutos)
+✅ CSS Variables não causam re-render
+✅ Imagens otimizadas com next/image
+
+========================
+ESCOPO PROIBIDO
+========================
+
+❌ **NÃO** implementar domínios customizados (MVP+2)
+❌ **NÃO** criar biblioteca de temas pré-configurados
+❌ **NÃO** implementar multi-idioma (i18n)
+❌ **NÃO** permitir upload de fonts customizadas
+❌ **NÃO** criar import/export de configurações
+❌ **NÃO** implementar preview responsivo (desktop/tablet/mobile)
+
+========================
+PRÓXIMOS PASSOS (MVP+2)
+========================
+
+Após implementar whitelabel básico, considerar:
+1. Domínios customizados (TenantDomainMiddleware + Vercel config)
+2. Biblioteca de temas pré-configurados
+3. Upload de favicon separado
+4. Histórico de mudanças de branding (audit log)
+5. Import/Export de configurações
+
+========================
+NOTAS DE IMPLEMENTAÇÃO
+========================
+
+1. **Compatibilidade**: Código antigo que usa `branding` estático ainda funciona (fallback)
+2. **Cache**: Tenant settings cached por 5 minutos (React Query + Next.js)
+3. **SEO**: Meta description personalizada por tenant
+4. **Segurança**: Apenas admin do tenant pode atualizar branding
+5. **Performance**: CSS Variables evitam re-render desnecessário
+6. **Acessibilidade**: Alt text em logos, labels em color pickers
+7. **Validação**: Dupla validação (client-side Zod + server-side Go)
+
+========================
+REFERÊNCIAS
+========================
+
+- AI_DEV_DIRECTIVE.md Seção 24 (Whitelabel)
+- PROMPT 01 (Foundation MVP - Tenant model)
+- PROMPT 04 (Frontend Public - Design system)
+- PROMPT 09 (Auth/Multi-tenancy - Isolamento)
+- shadcn/ui documentation: https://ui.shadcn.com
+- Tailwind CSS Variables: https://tailwindcss.com/docs/customizing-colors#using-css-variables
