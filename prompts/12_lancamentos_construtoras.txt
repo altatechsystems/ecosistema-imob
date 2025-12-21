@@ -1,0 +1,927 @@
+Você é um engenheiro full-stack sênior responsável por implementar a funcionalidade de **Lançamentos Imobiliários para Construtoras e Loteadoras** (MVP+2).
+
+IMPORTANTE:
+Este prompt implementa o vertical de construtoras/loteadoras conforme especificado em:
+- AI_DEV_DIRECTIVE.md
+- PLANO_DE_NEGOCIOS.md §16.5
+- SERVICOS_INOVADORES.md
+- prompts/01_foundation_mvp.txt (DevelopmentInfo struct já definida)
+
+Este recurso é OPCIONAL no MVP e pode ser ativado em MVP+2.
+
+========================
+CONTEXTO DE NEGÓCIO
+========================
+
+**Oportunidade de Mercado:**
+- Mercado de lançamentos: R$ 50B/ano no Brasil
+- Construtoras e loteadoras possuem dores específicas:
+  1. Gestão de empreendimentos com centenas de unidades
+  2. Controle de disponibilidade de unidades (disponível, reservada, vendida)
+  3. Tabela de vendas com preços por tipologia
+  4. Plantas, renders 3D, vídeos do empreendimento
+  5. Simulador de financiamento
+  6. Portal do comprador
+
+**Receita Estimada (PLANO_DE_NEGOCIOS.md §16.5.7):**
+- Taxa de setup: R$ 5.000/empreendimento
+- Mensalidade: R$ 500/mês/empreendimento
+- ROI: 15x (primeiro ano)
+
+**Diferencial Competitivo:**
+- Integração nativa com portal de vendas
+- Co-corretagem gamificada (torneios entre corretores)
+- Lead scoring para compradores qualificados
+- Tour 3D personalizado com preço dinâmico
+- Tokenização de recebíveis de comissão
+
+========================
+STACK TÉCNICA
+========================
+Backend:
+- Go (Golang) 1.21+ + Gin framework
+- Google Cloud Firestore
+- Firebase Authentication
+- Google Cloud Storage (GCS)
+
+Frontend Admin (Dashboard Construtora):
+- Next.js 14 (App Router)
+- React Query + Zustand
+- shadcn/ui + Tailwind CSS
+- React Hook Form + Zod
+
+Frontend Público (Portal de Vendas):
+- Next.js 14 (SSR para SEO 100%)
+- JSON-LD para rich snippets
+- Vercel Edge Functions
+
+========================
+OBJETIVO DESTE PROMPT
+========================
+Implementar funcionalidade completa de lançamentos imobiliários:
+
+1. **Backend (Go):**
+   - CRUD de empreendimentos (Development)
+   - Gestão de unidades (Property com DevelopmentInfo)
+   - Tabela de vendas (preços por tipologia)
+   - Simulador de financiamento
+
+2. **Frontend Admin:**
+   - Dashboard de empreendimentos
+   - Gestão de unidades (adicionar, editar, disponibilidade)
+   - Upload de plantas e mídia
+   - Tabela de vendas
+
+3. **Frontend Público:**
+   - Página de empreendimento (SEO otimizado)
+   - Busca de unidades
+   - Simulador de financiamento
+   - Tour 3D (integração com prompt 15)
+
+4. **Integrações:**
+   - Co-corretagem gamificada (prompt 13 - torneios)
+   - Lead scoring IA (prompt 14)
+   - Tour 3D personalizado (prompt 15)
+
+========================
+MODELOS DE DADOS
+========================
+
+### Development (Empreendimento)
+
+**IMPORTANTE**: Este modelo já foi definido no prompt 01, seção DevelopmentInfo.
+Aqui detalhamos a collection completa.
+
+Coleção: `/tenants/{tenantId}/developments/{developmentId}`
+
+```go
+package models
+
+import "time"
+
+type Development struct {
+    ID          string    `firestore:"-" json:"id"`
+    TenantID    string    `firestore:"tenant_id" json:"tenant_id"` // Construtora
+
+    // Identificação
+    Slug        string    `firestore:"slug" json:"slug"` // SEO-friendly URL
+    Name        string    `firestore:"name" json:"name"` // "Residencial Vista Verde"
+    Description string    `firestore:"description" json:"description"`
+
+    // Tipo de empreendimento
+    DevelopmentType DevelopmentType `firestore:"development_type" json:"development_type"` // apartment_building, condo_lots, subdivision
+
+    // Localização
+    Address     Address   `firestore:"address" json:"address"` // Reusa struct Address do Property
+
+    // Unidades
+    TotalUnits      int `firestore:"total_units" json:"total_units"`           // 200 unidades
+    UnitsAvailable  int `firestore:"units_available" json:"units_available"`   // Unidades disponíveis
+    UnitsSold       int `firestore:"units_sold" json:"units_sold"`             // Unidades vendidas
+    UnitsReserved   int `firestore:"units_reserved" json:"units_reserved"`     // Unidades reservadas
+
+    // Datas e status da obra
+    LaunchDate         time.Time          `firestore:"launch_date" json:"launch_date"`                 // Data de lançamento
+    DeliveryDate       time.Time          `firestore:"delivery_date" json:"delivery_date"`             // Previsão de entrega
+    ConstructionStatus ConstructionStatus `firestore:"construction_status" json:"construction_status"` // plant, foundation, structure, finishing, ready
+
+    // Status do empreendimento
+    Status DevelopmentStatus `firestore:"status" json:"status"` // pre_launch, active, sold_out, delivered, cancelled
+
+    // Financiamento
+    AcceptsFinancing   bool    `firestore:"accepts_financing" json:"accepts_financing"`       // Aceita financiamento
+    DownPaymentMin     float64 `firestore:"down_payment_min" json:"down_payment_min"`         // Entrada mínima (% do valor)
+    InstallmentsDuring int     `firestore:"installments_during" json:"installments_during"`   // Parcelas durante obra
+    InstallmentsAfter  int     `firestore:"installments_after" json:"installments_after"`     // Parcelas após entrega
+
+    // Mídia e documentos
+    LogoURL         string   `firestore:"logo_url,omitempty" json:"logo_url,omitempty"`               // Logo do empreendimento
+    CoverImageURL   string   `firestore:"cover_image_url,omitempty" json:"cover_image_url,omitempty"` // Imagem de capa
+    ImagesURLs      []string `firestore:"images_urls,omitempty" json:"images_urls,omitempty"`         // Fotos do empreendimento
+    MasterPlanURL   string   `firestore:"master_plan_url,omitempty" json:"master_plan_url,omitempty"` // Planta geral
+    FloorPlansURLs  []string `firestore:"floor_plans_urls,omitempty" json:"floor_plans_urls,omitempty"` // Plantas por tipologia
+    Video360URL     string   `firestore:"video_360_url,omitempty" json:"video_360_url,omitempty"`     // Tour virtual 360°
+    BrochureURL     string   `firestore:"brochure_url,omitempty" json:"brochure_url,omitempty"`       // Folder PDF
+
+    // Amenidades do condomínio
+    Amenities []string `firestore:"amenities,omitempty" json:"amenities,omitempty"` // ["piscina", "quadra", "salao_festas", "playground"]
+
+    // SEO (portal público)
+    SEOData SEOData `firestore:"seo_data" json:"seo_data"`
+
+    // Metadata
+    CreatedBy string    `firestore:"created_by" json:"created_by"` // BrokerID
+    CreatedAt time.Time `firestore:"created_at" json:"created_at"`
+    UpdatedAt time.Time `firestore:"updated_at" json:"updated_at"`
+}
+
+type DevelopmentType string
+const (
+    DevelopmentTypeApartmentBuilding DevelopmentType = "apartment_building" // Edifício de apartamentos
+    DevelopmentTypeCondoLots         DevelopmentType = "condo_lots"         // Loteamento de lotes em condomínio
+    DevelopmentTypeSubdivision       DevelopmentType = "subdivision"        // Loteamento aberto
+)
+
+type DevelopmentStatus string
+const (
+    DevelopmentStatusPreLaunch DevelopmentStatus = "pre_launch" // Pré-lançamento
+    DevelopmentStatusActive    DevelopmentStatus = "active"     // Ativo (vendendo)
+    DevelopmentStatusSoldOut   DevelopmentStatus = "sold_out"   // Esgotado (100% vendido)
+    DevelopmentStatusDelivered DevelopmentStatus = "delivered"  // Entregue
+    DevelopmentStatusCancelled DevelopmentStatus = "cancelled"  // Cancelado
+)
+
+type ConstructionStatus string
+const (
+    ConstructionStatusPlant      ConstructionStatus = "plant"      // Na planta
+    ConstructionStatusFoundation ConstructionStatus = "foundation" // Fundação
+    ConstructionStatusStructure  ConstructionStatus = "structure"  // Estrutura
+    ConstructionStatusFinishing  ConstructionStatus = "finishing"  // Acabamento
+    ConstructionStatusReady      ConstructionStatus = "ready"      // Pronto
+)
+
+type Address struct {
+    Street       string `firestore:"street" json:"street"`
+    Number       string `firestore:"number,omitempty" json:"number,omitempty"`
+    Complement   string `firestore:"complement,omitempty" json:"complement,omitempty"`
+    Neighborhood string `firestore:"neighborhood" json:"neighborhood"`
+    City         string `firestore:"city" json:"city"`
+    State        string `firestore:"state" json:"state"` // UF
+    ZipCode      string `firestore:"zip_code,omitempty" json:"zip_code,omitempty"`
+    Country      string `firestore:"country" json:"country"` // "BR"
+    Latitude     float64 `firestore:"latitude,omitempty" json:"latitude,omitempty"`
+    Longitude    float64 `firestore:"longitude,omitempty" json:"longitude,omitempty"`
+}
+
+type SEOData struct {
+    MetaTitle       string `firestore:"meta_title" json:"meta_title"`
+    MetaDescription string `firestore:"meta_description" json:"meta_description"`
+    CanonicalURL    string `firestore:"canonical_url,omitempty" json:"canonical_url,omitempty"`
+}
+```
+
+---
+
+### UnitTypology (Tipologia de Unidade)
+
+Subcoleção: `/tenants/{tenantId}/developments/{developmentId}/typologies/{typologyId}`
+
+```go
+type UnitTypology struct {
+    ID             string    `firestore:"-" json:"id"`
+    DevelopmentID  string    `firestore:"development_id" json:"development_id"` // ref Development
+    TenantID       string    `firestore:"tenant_id" json:"tenant_id"`
+
+    // Identificação
+    Name           string    `firestore:"name" json:"name"` // "Studio 35m²", "2 Dorms 65m²", "Lote 250m²"
+    Code           string    `firestore:"code" json:"code"` // "STD35", "2D65", "L250"
+
+    // Características
+    Bedrooms       int     `firestore:"bedrooms" json:"bedrooms"`
+    Bathrooms      int     `firestore:"bathrooms" json:"bathrooms"`
+    Suites         int     `firestore:"suites,omitempty" json:"suites,omitempty"`
+    ParkingSpaces  int     `firestore:"parking_spaces" json:"parking_spaces"`
+    TotalArea      float64 `firestore:"total_area" json:"total_area"` // m²
+    UsableArea     float64 `firestore:"usable_area,omitempty" json:"usable_area,omitempty"` // m²
+
+    // Preços (Tabela de Vendas)
+    BasePrice      float64   `firestore:"base_price" json:"base_price"`       // Preço base da tipologia
+    CurrentPrice   float64   `firestore:"current_price" json:"current_price"` // Preço atual (pode ter ajuste)
+    Currency       string    `firestore:"currency" json:"currency"`           // "BRL"
+    PriceHistory   []PriceHistory `firestore:"price_history,omitempty" json:"price_history,omitempty"` // Histórico de reajustes
+
+    // Mídia
+    FloorPlanURL   string   `firestore:"floor_plan_url,omitempty" json:"floor_plan_url,omitempty"` // Planta baixa
+    ImagesURLs     []string `firestore:"images_urls,omitempty" json:"images_urls,omitempty"`       // Fotos decoradas
+    Tour3DURL      string   `firestore:"tour_3d_url,omitempty" json:"tour_3d_url,omitempty"`       // Tour 3D (Matterport, etc)
+
+    // Contadores
+    TotalUnits     int `firestore:"total_units" json:"total_units"`         // Quantas unidades desta tipologia
+    UnitsAvailable int `firestore:"units_available" json:"units_available"` // Disponíveis
+    UnitsSold      int `firestore:"units_sold" json:"units_sold"`           // Vendidas
+    UnitsReserved  int `firestore:"units_reserved" json:"units_reserved"`   // Reservadas
+
+    // Metadata
+    CreatedAt time.Time `firestore:"created_at" json:"created_at"`
+    UpdatedAt time.Time `firestore:"updated_at" json:"updated_at"`
+}
+
+type PriceHistory struct {
+    PreviousPrice float64   `firestore:"previous_price" json:"previous_price"`
+    NewPrice      float64   `firestore:"new_price" json:"new_price"`
+    Reason        string    `firestore:"reason" json:"reason"` // "launch", "adjustment", "discount"
+    ChangedAt     time.Time `firestore:"changed_at" json:"changed_at"`
+    ChangedBy     string    `firestore:"changed_by" json:"changed_by"` // BrokerID
+}
+```
+
+---
+
+### Property (Unidade do Empreendimento)
+
+**IMPORTANTE**: A struct Property já foi definida no prompt 01.
+Para unidades de empreendimentos, o campo `DevelopmentInfo` deve ser preenchido.
+
+Exemplo de Property como unidade:
+
+```go
+// Exemplo: Apartamento 2 Dorms em empreendimento
+property := &Property{
+    TenantID:     "construtora_xyz",
+    PropertyType: PropertyTypeNewDevelopment, // Tipo novo para lançamentos
+
+    // Endereço = endereço do empreendimento
+    Address: development.Address,
+
+    // Características da unidade
+    Bedrooms:      2,
+    Bathrooms:     1,
+    Suites:        0,
+    ParkingSpaces: 1,
+    TotalArea:     65.5,
+    UsableArea:    58.0,
+
+    // Preço da unidade específica
+    SalePrice:    350000.00,
+    Currency:     "BRL",
+
+    // Status da unidade
+    Status:       PropertyStatusAvailable, // available, unavailable (vendida/reservada)
+
+    // ✅ NOVO: DevelopmentInfo (vincula ao empreendimento)
+    DevelopmentInfo: &DevelopmentInfo{
+        DevelopmentID:   "dev_residencial_vista_verde",
+        DevelopmentName: "Residencial Vista Verde",
+        TypologyID:      "typ_2d65",
+        TypologyName:    "2 Dorms 65m²",
+        UnitNumber:      "302",  // Torre A, Apto 302
+        Floor:           3,
+        Block:           "A",    // Torre/Bloco
+        UnitStatus:      UnitStatusAvailable, // available, reserved, sold
+    },
+}
+```
+
+**DevelopmentInfo Struct (já definida em prompt 01):**
+
+```go
+type DevelopmentInfo struct {
+    DevelopmentID   string         `firestore:"development_id" json:"development_id"`     // ref Development
+    DevelopmentName string         `firestore:"development_name" json:"development_name"` // Nome do empreendimento
+    TypologyID      string         `firestore:"typology_id" json:"typology_id"`           // ref UnitTypology
+    TypologyName    string         `firestore:"typology_name" json:"typology_name"`       // "2 Dorms 65m²"
+    UnitNumber      string         `firestore:"unit_number" json:"unit_number"`           // "302", "Lote 15"
+    Floor           int            `firestore:"floor,omitempty" json:"floor,omitempty"`   // Andar (apenas apartamentos)
+    Block           string         `firestore:"block,omitempty" json:"block,omitempty"`   // Torre/Bloco
+    UnitStatus      UnitStatus     `firestore:"unit_status" json:"unit_status"`           // available, reserved, sold
+    ReservedUntil   *time.Time     `firestore:"reserved_until,omitempty" json:"reserved_until,omitempty"` // Data de expiração da reserva
+}
+
+type UnitStatus string
+const (
+    UnitStatusAvailable UnitStatus = "available" // Disponível
+    UnitStatusReserved  UnitStatus = "reserved"  // Reservada (expira em X dias)
+    UnitStatusSold      UnitStatus = "sold"      // Vendida (contrato assinado)
+)
+```
+
+========================
+ENDPOINTS BACKEND (GIN)
+========================
+
+### Developments
+
+**POST /api/v1/tenants/:tenantId/developments**
+- Criar empreendimento
+- Permissão: admin da construtora
+- Body: Development struct
+- Behavior:
+  - Gerar slug SEO-friendly a partir do nome
+  - Validar datas (launch_date < delivery_date)
+  - Inicializar contadores (units_available = 0)
+  - ActivityLog: development_created
+
+**GET /api/v1/tenants/:tenantId/developments/:developmentId**
+- Buscar empreendimento por ID
+- Incluir: Typologies (subcoleção), contadores atualizados
+
+**PATCH /api/v1/tenants/:tenantId/developments/:developmentId**
+- Atualizar empreendimento
+- Permissão: admin da construtora
+- ActivityLog: development_updated
+
+**GET /api/v1/tenants/:tenantId/developments**
+- Listar empreendimentos do tenant
+- Filtros: status, development_type
+- Ordenar: created_at DESC
+
+**GET /api/v1/developments/:slug** (PÚBLICO)
+- Buscar empreendimento por slug (portal público)
+- Retornar: Development + Typologies + SEO metadata
+- Incrementar view_count (analytics)
+
+---
+
+### Unit Typologies
+
+**POST /api/v1/tenants/:tenantId/developments/:developmentId/typologies**
+- Criar tipologia de unidade
+- Permissão: admin da construtora
+- Body: UnitTypology struct
+- Behavior:
+  - Validar total_units > 0
+  - Inicializar units_available = 0 (será incrementado ao criar unidades)
+  - ActivityLog: typology_created
+
+**PATCH /api/v1/tenants/:tenantId/developments/:developmentId/typologies/:typologyId**
+- Atualizar tipologia (preço, mídia)
+- Se alterar preço:
+  - Adicionar entrada em price_history
+  - Atualizar current_price
+  - ActivityLog: typology_price_updated
+
+**GET /api/v1/tenants/:tenantId/developments/:developmentId/typologies**
+- Listar tipologias do empreendimento
+- Ordenar: bedrooms ASC, total_area ASC
+
+---
+
+### Properties (Unidades)
+
+**POST /api/v1/tenants/:tenantId/developments/:developmentId/units**
+- Criar unidade (Property com DevelopmentInfo)
+- Permissão: admin da construtora
+- Body: unit_number, floor, block, typology_id
+- Behavior:
+  - Buscar Typology para copiar características (bedrooms, area, price)
+  - Criar Property com DevelopmentInfo preenchido
+  - Incrementar Development.units_available
+  - Incrementar UnitTypology.units_available
+  - ActivityLog: unit_created
+
+**PATCH /api/v1/tenants/:tenantId/developments/:developmentId/units/:unitId/status**
+- Atualizar status da unidade (available → reserved → sold)
+- Permissão: admin ou corretor vinculado
+- Body: new_status, reserved_until (se status = reserved)
+- Behavior:
+  - Validar transição de status (available → reserved → sold, não pode voltar)
+  - Se reserved:
+    - Setar reserved_until = now + 7 dias (configurável)
+    - Criar job automático para liberar se expirar
+  - Se sold:
+    - Incrementar Development.units_sold
+    - Incrementar UnitTypology.units_sold
+    - Decrementar counters de available/reserved
+  - ActivityLog: unit_status_changed
+
+**GET /api/v1/tenants/:tenantId/developments/:developmentId/units**
+- Listar unidades do empreendimento
+- Filtros: typology_id, unit_status, floor, block
+- Retornar: Property com DevelopmentInfo
+
+**GET /api/v1/developments/:developmentSlug/units** (PÚBLICO)
+- Listar unidades disponíveis (portal público)
+- Filtros: bedrooms, bathrooms, min_price, max_price, typology
+- Retornar apenas: available + reserved (ocultar sold)
+
+---
+
+### Financiamento (Simulador)
+
+**POST /api/v1/developments/:developmentId/simulate-financing** (PÚBLICO)
+- Simular financiamento
+- Body: unit_price, down_payment_percent, financing_months
+- Retornar: Cálculo de parcelas (Price, SAC), juros, CET
+- Fórmula:
+  - Sistema Price: PMT = PV * (i * (1+i)^n) / ((1+i)^n - 1)
+  - Sistema SAC: Amortização constante + juros decrescentes
+  - Taxa: 10.5% a.a. + TR (simulação, não vinculante)
+
+**Exemplo de Response:**
+
+```json
+{
+  "unit_price": 350000.00,
+  "down_payment": 70000.00,
+  "financed_amount": 280000.00,
+  "financing_months": 360,
+  "interest_rate_annual": 10.5,
+  "systems": {
+    "price": {
+      "monthly_installment": 2578.45,
+      "total_paid": 928242.00,
+      "total_interest": 648242.00
+    },
+    "sac": {
+      "first_installment": 3227.78,
+      "last_installment": 781.11,
+      "total_paid": 844500.00,
+      "total_interest": 564500.00
+    }
+  }
+}
+```
+
+========================
+FRONTEND ADMIN (DASHBOARD)
+========================
+
+### Páginas e Componentes
+
+**1. /admin/developments** (Lista de Empreendimentos)
+- Tabela com empreendimentos
+- Colunas: Nome, Tipo, Status, Unidades (Total/Disponíveis/Vendidas), Ações
+- Filtros: Status, Tipo
+- Ação: Criar Novo Empreendimento
+
+**2. /admin/developments/new** (Criar Empreendimento)
+- Form multi-step:
+  - Passo 1: Informações Básicas (nome, tipo, endereço)
+  - Passo 2: Datas e Obra (lançamento, entrega, status da obra)
+  - Passo 3: Financiamento (aceita financiamento, entrada mínima, parcelas)
+  - Passo 4: Mídia (logo, capa, fotos, planta geral, vídeo 360°)
+  - Passo 5: Amenidades (piscina, quadra, salão de festas, playground)
+  - Passo 6: SEO (meta title, meta description)
+- Validação: React Hook Form + Zod
+- Upload: Drag & drop para GCS
+
+**3. /admin/developments/:id** (Detalhes do Empreendimento)
+- Tabs:
+  - **Visão Geral**: Informações, métricas, gráfico de vendas
+  - **Tipologias**: Lista de tipologias, criar/editar
+  - **Unidades**: Tabela de unidades, disponibilidade, ações
+  - **Mídia**: Galeria de fotos, vídeos, plantas
+  - **Corretores**: Corretores vinculados, torneios (prompt 13)
+  - **Leads**: Leads do empreendimento (prompt 14)
+
+**4. /admin/developments/:id/typologies/new** (Criar Tipologia)
+- Form:
+  - Nome, Código
+  - Quartos, Banheiros, Suítes, Vagas
+  - Área Total, Área Útil
+  - Preço Base, Preço Atual
+  - Planta Baixa (upload)
+  - Fotos Decoradas (upload múltiplo)
+  - Tour 3D (URL ou upload)
+  - Quantidade Total de Unidades
+
+**5. /admin/developments/:id/units** (Gestão de Unidades)
+- Tabela:
+  - Colunas: Unidade, Tipologia, Andar, Bloco, Preço, Status, Ações
+  - Filtros: Tipologia, Status, Andar, Bloco
+  - Ordenação: Unidade, Preço
+  - Ações:
+    - Criar Unidade (modal)
+    - Editar Unidade
+    - Alterar Status (available → reserved → sold)
+- Criar em lote: Gerar X unidades automaticamente (Apto 101 a 104, etc)
+
+**6. /admin/developments/:id/units/:unitId/edit** (Editar Unidade)
+- Form:
+  - Número da Unidade
+  - Andar, Bloco
+  - Tipologia (select)
+  - Preço (pode divergir do base_price da tipologia)
+  - Status
+  - Observações
+
+**Componentes Reutilizáveis:**
+
+```typescript
+// components/developments/DevelopmentCard.tsx
+interface DevelopmentCardProps {
+  development: Development;
+  onEdit: (id: string) => void;
+  onViewDetails: (id: string) => void;
+}
+
+// components/developments/TypologyCard.tsx
+interface TypologyCardProps {
+  typology: UnitTypology;
+  onEdit: (id: string) => void;
+  onViewUnits: (id: string) => void;
+}
+
+// components/developments/UnitStatusBadge.tsx
+interface UnitStatusBadgeProps {
+  status: 'available' | 'reserved' | 'sold';
+}
+
+// components/developments/FinancingSimulator.tsx
+interface FinancingSimulatorProps {
+  unitPrice: number;
+  downPaymentMin: number;
+  installmentsDuring: number;
+  installmentsAfter: number;
+}
+```
+
+========================
+FRONTEND PÚBLICO (PORTAL)
+========================
+
+### Páginas SEO-Optimizadas
+
+**1. /empreendimentos** (Lista de Empreendimentos)
+- Grid de cards com empreendimentos ativos
+- Filtros: Cidade, Tipo, Preço, Quartos
+- SEO:
+  - Title: "Lançamentos Imobiliários em [Cidade] | [Nome da Imobiliária]"
+  - H1: "Lançamentos Imobiliários em [Cidade]"
+  - JSON-LD: ItemList schema
+
+**2. /empreendimentos/:slug** (Página do Empreendimento)
+- Hero: Imagem de capa, logo, nome
+- Seção: Descrição, endereço, mapa
+- Seção: Características (amenidades, datas, status da obra)
+- Seção: Tipologias (cards com fotos, preços, características)
+- Seção: Galeria de fotos
+- Seção: Tour 3D (iframe ou modal)
+- Seção: Simulador de Financiamento
+- Seção: Fale com um Corretor (formulário de lead)
+- SEO:
+  - Title: "[Nome do Empreendimento] | [Bairro] | [Cidade]"
+  - H1: "[Nome do Empreendimento]"
+  - Meta Description: "[Descrição] - A partir de R$ [Menor Preço]"
+  - JSON-LD: RealEstateListing schema
+
+**3. /empreendimentos/:slug/unidades** (Busca de Unidades)
+- Tabela/Grid de unidades disponíveis
+- Filtros: Tipologia, Andar, Bloco, Preço
+- Ordenar: Preço, Área, Andar
+- Ação: Ver Detalhes, Agendar Visita, Simular Financiamento
+
+**4. /empreendimentos/:slug/unidades/:unitNumber** (Detalhes da Unidade)
+- Hero: Fotos da tipologia
+- Características: Quartos, Área, Preço, Andar, Bloco
+- Planta baixa
+- Simulador de financiamento
+- Tour 3D (se disponível)
+- Formulário: Tenho interesse nesta unidade (lead)
+- SEO:
+  - Title: "[Unidade] - [Nome do Empreendimento] | [Cidade]"
+  - noindex (evitar indexar cada unidade individualmente)
+
+**JSON-LD Schema (RealEstateListing):**
+
+```typescript
+// utils/jsonld.ts
+export function generateDevelopmentSchema(development: Development): string {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "RealEstateListing",
+    "name": development.name,
+    "description": development.description,
+    "url": `https://example.com/empreendimentos/${development.slug}`,
+    "image": development.images_urls,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": `${development.address.street}, ${development.address.number}`,
+      "addressLocality": development.address.city,
+      "addressRegion": development.address.state,
+      "postalCode": development.address.zip_code,
+      "addressCountry": "BR"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": development.address.latitude,
+      "longitude": development.address.longitude
+    },
+    "offers": {
+      "@type": "AggregateOffer",
+      "priceCurrency": "BRL",
+      "lowPrice": development.min_price, // Calcular do backend
+      "highPrice": development.max_price,
+      "offerCount": development.units_available
+    },
+    "numberOfRooms": development.typologies.map(t => t.bedrooms).join(", "),
+    "floorSize": {
+      "@type": "QuantitativeValue",
+      "value": development.typologies[0].total_area,
+      "unitCode": "MTK" // m²
+    }
+  });
+}
+```
+
+========================
+INTEGRAÇÕES COM OUTROS PROMPTS
+========================
+
+### 1. Co-Corretagem Gamificada (Prompt 13)
+
+Construtoras podem criar **torneios** para incentivar vendas:
+
+```go
+// Criar torneio para empreendimento
+tournament := &Tournament{
+    TenantID:      "construtora_xyz",
+    DevelopmentID: "dev_residencial_vista_verde", // ✅ Vincula ao empreendimento
+    StartDate:     time.Now(),
+    EndDate:       time.Now().AddDate(0, 3, 0), // 3 meses
+    IsActive:      true,
+    Prizes: []TournamentPrize{
+        {Rank: 1, Description: "R$ 10.000", Type: "cash"},
+        {Rank: 2, Description: "R$ 5.000", Type: "cash"},
+        {Rank: 3, Description: "R$ 2.000", Type: "cash"},
+    },
+}
+```
+
+Leaderboard atualizado automaticamente ao vender unidade:
+- Incrementar `units_sold` do corretor
+- Recalcular ranking
+- Notificar corretores (email/push)
+
+### 2. Lead Scoring IA (Prompt 14)
+
+Leads de empreendimentos recebem score automático:
+
+```go
+// Criar lead para unidade de empreendimento
+lead := &Lead{
+    PropertyID: "unit_302", // Unidade 302
+    DevelopmentID: "dev_residencial_vista_verde", // ✅ Vincula ao empreendimento
+    Channel: LeadChannelForm,
+    // ... outros campos
+}
+
+// IA Score considera:
+// - Renda declarada vs preço da unidade
+// - Pré-aprovação de financiamento
+// - Visitas ao site (tracking)
+// - Tempo na página (>5min = maior interesse)
+// - Cliques no simulador de financiamento
+```
+
+Score > 70 = Lead Quente (notificar corretor imediatamente)
+
+### 3. Tour 3D Personalizado (Prompt 15)
+
+Empreendimentos podem ter tour 3D por tipologia:
+
+```go
+// Adicionar tour 3D à tipologia
+typology.Tour3DURL = "https://my.matterport.com/show/?m=abc123"
+
+// Ou gerar tour 3D com Three.js (prompt 15)
+// - Upload de planta baixa
+// - Sistema gera tour 3D navegável
+// - Personalização: cores, acabamentos, móveis
+```
+
+Tour 3D exibido na página do empreendimento e da unidade.
+
+### 4. Tokenização de Recebíveis (Prompt 16)
+
+Corretores podem tokenizar comissões de empreendimentos:
+
+```go
+// Corretor vendeu 5 unidades, total R$ 50k em comissão
+// Parcelas: R$ 10k/mês x 5 meses
+// Tokenizar 50% com 10% de desconto = R$ 22.5k à vista
+
+tokenizationOffer := &TokenizationOffer{
+    BrokerID:         "broker_123",
+    DevelopmentID:    "dev_residencial_vista_verde", // ✅ Empreendimento
+    TotalCommission:  50000.00,
+    Installments:     5,
+    PercentTokenized: 50, // 50%
+    Discount:         10, // 10%
+    Status:           "active",
+}
+```
+
+========================
+FLUXO COMPLETO (EXEMPLO)
+========================
+
+### Passo a Passo: Construtora XYZ lança empreendimento
+
+**1. Criar Empreendimento (Admin)**
+- Login no dashboard como admin da Construtora XYZ
+- Criar empreendimento "Residencial Vista Verde"
+- Tipo: apartment_building
+- Endereço: Rua das Flores, 123 - Centro - São Paulo/SP
+- Lançamento: 01/03/2025
+- Entrega: 01/12/2027
+- Status da obra: foundation
+- Aceita financiamento: Sim
+- Entrada mínima: 20%
+- Parcelas durante obra: 36
+- Parcelas após entrega: 240 (20 anos)
+- Upload: Logo, capa, fotos do terreno, planta geral
+- Amenidades: Piscina, Quadra, Salão de festas, Playground
+- SEO: Title, Description
+
+**2. Criar Tipologias**
+- Tipologia 1: "Studio 35m²"
+  - 0 quartos, 1 banheiro, 1 vaga
+  - Área: 35m²
+  - Preço: R$ 250.000
+  - Total: 20 unidades
+  - Upload: Planta, fotos decoradas
+- Tipologia 2: "2 Dorms 65m²"
+  - 2 quartos, 1 banheiro, 1 vaga
+  - Área: 65m²
+  - Preço: R$ 350.000
+  - Total: 80 unidades
+  - Upload: Planta, fotos decoradas, tour 3D
+- Tipologia 3: "3 Dorms 90m²"
+  - 3 quartos, 2 banheiros, 2 vagas
+  - Área: 90m²
+  - Preço: R$ 500.000
+  - Total: 50 unidades
+
+**3. Criar Unidades (em lote)**
+- Tipologia Studio: Apto 101 a 105 (5º andar), 201 a 205 (6º andar), ... (Total: 20)
+- Tipologia 2 Dorms: Apto 106 a 109 (5º andar), 206 a 209 (6º andar), ... (Total: 80)
+- Tipologia 3 Dorms: Apto 110 a 111 (5º andar), 210 a 211 (6º andar), ... (Total: 50)
+
+Sistema cria 150 Properties automaticamente com DevelopmentInfo preenchido.
+
+**4. Criar Torneio (Co-corretagem Gamificada)**
+- Nome: "Torneio de Lançamento Vista Verde"
+- Período: 01/03/2025 a 31/05/2025 (3 meses)
+- Prêmios:
+  - 1º lugar: R$ 10.000
+  - 2º lugar: R$ 5.000
+  - 3º lugar: R$ 2.000
+- Regra: Corretor que vender mais unidades ganha
+
+**5. Portal Público (Comprador)**
+- Acessar: www.imobiliariaxyz.com.br/empreendimentos/residencial-vista-verde
+- Ver: Fotos, descrição, amenidades, status da obra
+- Filtrar unidades: 2 quartos, até R$ 400k
+- Ver unidade: Apto 206 - 2 Dorms - R$ 350k - 6º andar - Bloco A
+- Simular financiamento:
+  - Preço: R$ 350.000
+  - Entrada 20%: R$ 70.000
+  - Financiamento: R$ 280.000 em 360 meses
+  - Sistema Price: R$ 2.578/mês
+  - Sistema SAC: 1ª parcela R$ 3.227, última R$ 781
+- Preencher formulário: "Tenho interesse nesta unidade"
+  - Nome, Email, Telefone, Mensagem
+  - Consentimento LGPD
+- Lead criado com score 75 (Alta renda + Simulou financiamento)
+
+**6. Corretor Recebe Lead**
+- Dashboard: Novo lead "João Silva" - Unidade 206 - Score 75
+- Entrar em contato via WhatsApp
+- Agendar visita ao empreendimento
+- Visita realizada
+- João decide comprar
+- Corretor altera status da unidade: available → reserved (7 dias)
+- João assina proposta
+- Corretor altera status: reserved → sold
+
+**7. Métricas Atualizadas**
+- Development.units_sold: 0 → 1
+- Development.units_available: 150 → 149
+- Typology "2 Dorms".units_sold: 0 → 1
+- Typology "2 Dorms".units_available: 80 → 79
+- Leaderboard do torneio: Corretor sobe para 1º lugar
+
+**8. Corretor Tokeniza Comissão**
+- Comissão da venda: R$ 10.000 (3% de R$ 350k)
+- Parcelas: R$ 2.000/mês x 5 meses
+- Tokenizar 50% com 10% de desconto
+- Receber à vista: R$ 4.500 (em vez de esperar 5 meses)
+
+========================
+CRITÉRIOS DE SUCESSO
+========================
+
+✅ Development CRUD completo no backend
+✅ UnitTypology CRUD completo no backend
+✅ Property com DevelopmentInfo vincula unidade ao empreendimento
+✅ Contadores (units_available, units_sold, units_reserved) sincronizados
+✅ Status de unidade (available → reserved → sold) com validações
+✅ Simulador de financiamento funcional (Price + SAC)
+✅ Dashboard admin permite gestão completa de empreendimentos
+✅ Portal público exibe empreendimentos com SEO 100%
+✅ JSON-LD schema correto para Google Rich Snippets
+✅ Integração com torneios (prompt 13)
+✅ Integração com lead scoring (prompt 14)
+✅ Integração com tour 3D (prompt 15)
+✅ Integração com tokenização (prompt 16)
+✅ ActivityLog registra todos os eventos críticos
+✅ Upload de mídia para GCS funcional
+✅ Tabela de vendas com histórico de preços
+
+========================
+AUDITORIA OBRIGATÓRIA
+========================
+
+ActivityLog para eventos DESTE prompt:
+- development_created
+- development_updated
+- development_status_changed
+- typology_created
+- typology_updated
+- typology_price_updated
+- unit_created
+- unit_status_changed (available → reserved, reserved → sold)
+- unit_reserved_expired (job automático)
+- tournament_created (se integração com prompt 13)
+- lead_created (se via formulário de empreendimento)
+
+Ver AI_DEV_DIRECTIVE.md seção 17 para campos obrigatórios.
+
+========================
+ENTREGA ESPERADA
+========================
+
+1. Backend Go:
+   - Models: Development, UnitTypology, DevelopmentInfo (já em Property)
+   - Repositories: DevelopmentRepository, TypologyRepository
+   - Services: DevelopmentService, TypologyService, FinancingService
+   - Handlers: DevelopmentHandler, TypologyHandler
+   - Endpoints: CRUD completo
+
+2. Frontend Admin:
+   - Páginas: Lista, Criar, Editar, Detalhes
+   - Componentes: DevelopmentCard, TypologyCard, UnitTable, FinancingSimulator
+   - Forms: Validação com Zod + React Hook Form
+   - Upload: Drag & drop para GCS
+
+3. Frontend Público:
+   - Página: /empreendimentos (lista)
+   - Página: /empreendimentos/:slug (detalhes)
+   - Página: /empreendimentos/:slug/unidades (busca)
+   - Página: /empreendimentos/:slug/unidades/:unitNumber (detalhes)
+   - SEO: JSON-LD, meta tags, sitemap
+
+4. Documentação:
+   - README.md com instruções de setup
+   - Swagger/OpenAPI para endpoints
+   - Fluxo completo em docs/flows/development_flow.md
+
+========================
+NOTAS FINAIS
+========================
+
+- Este prompt pode ser executado APÓS os prompts 01, 02, 04, 09, 10 (MVP básico)
+- Requer integração com GCS para upload de mídia
+- Simulador de financiamento é **estimativa**, não vinculante
+- Status de unidade reserved expira automaticamente em 7 dias (configurável)
+- Torneios são opcionais, mas altamente recomendados para engajamento
+- Lead scoring melhora conversão de compradores qualificados
+- Tour 3D aumenta tempo de permanência e reduz visitas desnecessárias
+- Tokenização de recebíveis melhora fluxo de caixa dos corretores
+
+**ROI Esperado:**
+- Taxa de setup: R$ 5.000/empreendimento
+- Mensalidade: R$ 500/mês/empreendimento
+- 10 empreendimentos ativos = R$ 60k (ano 1) + R$ 50k/ano (recorrente)
+- Churn baixo (construtoras ficam até vender todas as unidades)
+
+**Referências:**
+- AI_DEV_DIRECTIVE.md
+- PLANO_DE_NEGOCIOS.md §16.5
+- SERVICOS_INOVADORES.md
+- prompts/01_foundation_mvp.txt
+- prompts/13_gamificacao_torneios.txt (co-corretagem)
+- prompts/14_ia_lead_scoring.txt (lead scoring)
+- prompts/15_tour_3d_personalizado.txt (tour 3D)
+- prompts/16_tokenizacao_recebiveis.txt (tokenização)

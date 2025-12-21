@@ -9,6 +9,25 @@
 
 ---
 
+## 📚 Documentação Relacionada
+
+**Para implementação técnica:**
+- [AI_DEV_DIRECTIVE.md](AI_DEV_DIRECTIVE.md) - Contrato supremo do projeto (stack, arquitetura, decisões técnicas)
+- [docs/INDEX.md](docs/INDEX.md) - Índice completo da documentação (navegação rápida)
+- [VALIDACAO_FINAL.md](VALIDACAO_FINAL.md) - Status atual e próximos passos
+
+**Para verticais específicos:**
+- [SERVICOS_INOVADORES.md](SERVICOS_INOVADORES.md) - 4 serviços inovadores para construtoras (R$ 2.08M/ano)
+- [ANALISE_MERCADO_ALUGUEL_BRASIL.md](ANALISE_MERCADO_ALUGUEL_BRASIL.md) - Análise completa do mercado de locação
+- [docs/DECISAO_ARQUITETURA_FRONTENDS.md](docs/DECISAO_ARQUITETURA_FRONTENDS.md) - Decisão de separar frontends por contexto
+
+**Para prompts de implementação:**
+- [prompts/01_foundation_mvp.txt](prompts/01_foundation_mvp.txt) - Modelos de dados fundacionais
+- [prompts/12_lancamentos_construtoras.txt](prompts/12_lancamentos_construtoras.txt) - Lançamentos imobiliários (MVP+2)
+- Ver [docs/INDEX.md](docs/INDEX.md) para lista completa de 20 prompts
+
+---
+
 ## 1. Resumo Executivo
 
 Este plano descreve a criação de uma infraestrutura imobiliária digital no Brasil — inspirada em estruturas maduras do mercado norte-americano, porém adaptada à realidade brasileira (alta dependência de portais, inventário fragmentado e prática consolidada de co-corretagem).
@@ -668,6 +687,10 @@ Whitelabel é a **alavanca de maior retorno** (26x ROI) e **maior impacto em LTV
 
 ### 16.4 MVP+2 (Mês 4-6): Vertical Lançamentos (Construtoras/Loteadoras) ⭐ NOVO
 
+**📖 Implementação Técnica:**
+- [prompts/01_foundation_mvp.txt](prompts/01_foundation_mvp.txt) - DevelopmentInfo struct já preparada (linhas 247-286)
+- [prompts/12_lancamentos_construtoras.txt](prompts/12_lancamentos_construtoras.txt) - Implementação completa (Development, UnitTypology, Properties)
+
 **Mudança Estratégica**: Expandir para **construtoras e loteadoras** com vertical de lançamentos imobiliários, capturando um mercado de **ticket 10-15x maior** que corretores autônomos.
 
 ---
@@ -815,6 +838,13 @@ Whitelabel é a **alavanca de maior retorno** (26x ROI) e **maior impacto em LTV
 ### 16.5 MVP+2 a MVP+4 (4-12 meses): Serviços Inovadores para Construtoras ⭐ NOVO
 
 Além da vertical básica de lançamentos (Seção 16.4), a plataforma oferecerá **4 serviços inovadores** que criam diferenciação competitiva e aumentam o ticket médio de construtoras/loteadoras.
+
+**📖 Documentação Técnica Completa:**
+- [SERVICOS_INOVADORES.md](SERVICOS_INOVADORES.md) - Especificação detalhada de todos os 4 serviços (90+ páginas)
+- [prompts/13_gamificacao_torneios.txt](prompts/13_gamificacao_torneios.txt) - Implementação co-corretagem gamificada (PENDENTE)
+- [prompts/14_ia_lead_scoring.txt](prompts/14_ia_lead_scoring.txt) - Implementação lead scoring IA
+- [prompts/15_tour_3d_personalizado.txt](prompts/15_tour_3d_personalizado.txt) - Implementação tour 3D
+- [prompts/16_tokenizacao_recebiveis.txt](prompts/16_tokenizacao_recebiveis.txt) - Implementação tokenização (PENDENTE)
 
 ---
 
@@ -1172,6 +1202,14 @@ contract CoCorretagemNFT {
 **Mudança Estratégica**: O mercado de locação representa **60-65% do volume de transações imobiliárias** no Brasil, mas possui dores estruturais que nenhuma plataforma resolve completamente.
 
 **Insight**: QuintoAndar domina gestão mas verticalizou (fechou marketplace). ZAP/VivaReal são apenas vitrines. **Nossa oportunidade**: marketplace aberto + gestão end-to-end.
+
+**📖 Documentação Completa:**
+- [ANALISE_MERCADO_ALUGUEL_BRASIL.md](ANALISE_MERCADO_ALUGUEL_BRASIL.md) - Análise detalhada do mercado (100+ páginas)
+- [prompts/01_foundation_mvp.txt](prompts/01_foundation_mvp.txt) - RentalInfo struct já preparada (linhas 199-359)
+- [docs/DECISAO_ARQUITETURA_FRONTENDS.md](docs/DECISAO_ARQUITETURA_FRONTENDS.md) - Decisão de frontend separado para gestão de locação
+- [prompts/17_locacao_anuncios.txt](prompts/17_locacao_anuncios.txt) - Implementação MVP+3 (PENDENTE)
+- [prompts/18_locacao_contratos.txt](prompts/18_locacao_contratos.txt) - Implementação MVP+4 (PENDENTE)
+- [prompts/19_locacao_pagamentos.txt](prompts/19_locacao_pagamentos.txt) - Implementação MVP+5 (PENDENTE)
 
 ---
 
@@ -1798,8 +1836,18 @@ A plataforma opera como **infraestrutura tecnológica** que conecta profissionai
 - **Auditoria**: ActivityLog estruturado; blockchain-ready via hash e campos reservados (sem on-chain no MVP)
 - **Importação**: XML Union na raiz do repositório
 
-### Referência:
-Ver [AI_DEV_DIRECTIVE.md](AI_DEV_DIRECTIVE.md) Seções 14-15 para detalhes completos da stack.
+### Referências Técnicas Detalhadas:
+
+**Arquitetura e Decisões:**
+- [AI_DEV_DIRECTIVE.md](AI_DEV_DIRECTIVE.md) - Contrato supremo do projeto (Seções 14-15 para stack completa)
+- [docs/DECISAO_ARQUITETURA_FRONTENDS.md](docs/DECISAO_ARQUITETURA_FRONTENDS.md) - Decisão de separar frontends por contexto (DDD)
+
+**Modelos de Dados:**
+- [prompts/01_foundation_mvp.txt](prompts/01_foundation_mvp.txt) - Foundation: Property, Listing, Lead, RentalInfo, DevelopmentInfo
+- [firestore.indexes.json](firestore.indexes.json) - 56 índices compostos Firestore para todas as queries
+
+**Prompts de Implementação:**
+- Ver [docs/INDEX.md](docs/INDEX.md) para lista completa de 20 prompts organizados por prioridade e dependências
 
 ---
 
