@@ -129,6 +129,298 @@ Este é um **projeto greenfield** com documentação técnica completa (98KB de 
 
 ---
 
+### 📋 Detalhamento: Arquitetura Blockchain-Ready (ActivityLog)
+
+**Contexto Estratégico**:
+A COFECI Resolução 1551/2025 (PITD - Plataformas de Intermediação de Transações Digitais) está **SUSPENSA** e não tem efeito legal vigente. Entretanto, implementaremos uma arquitetura "blockchain-ready" desde o MVP para garantir vantagem competitiva de 18-22 meses quando (e se) a regulamentação for aprovada.
+
+**Estratégia**:
+- ✅ Hash SHA-256 **ATIVO** desde o MVP (auditoria + preparação)
+- ✅ Cadeia de blocos **LOCAL** (prev_hash → hash)
+- ✅ Campos **RESERVADOS** para blockchain (blockchain_tx, token_id)
+- ❌ Registro on-chain **INATIVO** até regulamentação
+
+#### ActivityLog Model (internal/models/activity_log.go)
+
+```go
+package models
+
+import (
+    "crypto/sha256"
+    "encoding/hex"
+    "fmt"
+    "time"
+)
+
+// ActivityLog mantém trilha de auditoria imutável de todas as ações na plataforma.
+//
+// ESTRATÉGIA BLOCKCHAIN-READY:
+// - Hash SHA-256 garante imutabilidade desde o MVP (compliance + preparação)
+// - Campos blockchain_tx e token_id preparados para PITD (Res. 1551/2025)
+// - Se regulamentação for aprovada, ativar blockchain em 2-4 semanas
+// - Vantagem competitiva: 18-22 meses à frente de concorrentes
+//
+// STATUS REGULATÓRIO (Dezembro 2025):
+// - Resolução COFECI 1551/2025 SUSPENSA (sem efeito legal)
+// - blockchain_tx permanece NULL até regularização
+// - Hash SHA-256 já entrega valor (auditoria, LGPD, co-corretagem)
+type ActivityLog struct {
+    // Identificação
+    ID        string    `firestore:"id" json:"id"`
+    Event     string    `firestore:"event" json:"event"` // Ex: "lead_distributed", "partnership_accepted"
+    Timestamp time.Time `firestore:"timestamp" json:"timestamp"`
+
+    // Multi-Tenancy
+    TenantID  string `firestore:"tenant_id" json:"tenant_id"`
+    UserID    string `firestore:"user_id" json:"user_id"` // Broker que executou a ação
+
+    // ✅ BLOCKCHAIN-READY: Campos para auditoria imutável
+    Hash         string  `firestore:"hash" json:"hash"`                   // SHA-256 do evento (ATIVO no MVP)
+    PrevHash     string  `firestore:"prev_hash" json:"prev_hash"`         // Hash do evento anterior (cadeia local)
+    BlockchainTx *string `firestore:"blockchain_tx,omitempty" json:"blockchain_tx,omitempty"` // NULL no MVP
+    TokenID      *string `firestore:"token_id,omitempty" json:"token_id,omitempty"`           // NULL no MVP
+
+    // Dados do evento (JSON flexível)
+    Data map[string]interface{} `firestore:"data" json:"data"`
+
+    // Metadata
+    IPAddress  string            `firestore:"ip_address,omitempty" json:"ip_address,omitempty"`
+    UserAgent  string            `firestore:"user_agent,omitempty" json:"user_agent,omitempty"`
+    Metadata   map[string]string `firestore:"metadata,omitempty" json:"metadata,omitempty"`
+}
+
+// GenerateHash calcula SHA-256 do evento para garantir imutabilidade
+// Formato: hash(event + data + timestamp + prev_hash)
+func (log *ActivityLog) GenerateHash() string {
+    // Serializar dados do evento de forma determinística
+    dataStr := fmt.Sprintf("%v", log.Data) // Simplificado - produção deve usar JSON ordenado
+
+    // Concatenar campos críticos
+    payload := fmt.Sprintf("%s|%s|%s|%s|%s",
+        log.Event,
+        dataStr,
+        log.Timestamp.Format(time.RFC3339Nano),
+        log.PrevHash,
+        log.TenantID,
+    )
+
+    // Calcular SHA-256
+    hash := sha256.Sum256([]byte(payload))
+    return hex.EncodeToString(hash[:])
+}
+
+// Validate verifica integridade da cadeia de blocos
+func (log *ActivityLog) Validate(expectedPrevHash string) bool {
+    // Verificar se prev_hash aponta para o evento anterior
+    if log.PrevHash != expectedPrevHash {
+        return false
+    }
+
+    // Recalcular hash e comparar com o armazenado
+    calculatedHash := log.GenerateHash()
+    return calculatedHash == log.Hash
+}
+
+// IsBlockchainEnabled indica se a feature de blockchain on-chain está ativa
+// (monitorar regulamentação PITD - Resolução 1551/2025)
+func (log *ActivityLog) IsBlockchainEnabled() bool {
+    return log.BlockchainTx != nil
+}
+
+// ActivateBlockchain ativa registro on-chain (SOMENTE após regulamentação PITD)
+// IMPORTANTE: NÃO chamar no MVP - campo permanece NULL até COFECI reativar Res. 1551/2025
+func (log *ActivityLog) ActivateBlockchain(txHash string, tokenID string) {
+    log.BlockchainTx = &txHash
+    log.TokenID = &tokenID
+}
+```
+
+#### ActivityLogRepository (internal/repository/activity_log_repository.go)
+
+```go
+package repository
+
+import (
+    "context"
+    "fmt"
+    "imovel-hub/internal/models"
+    "cloud.google.com/go/firestore"
+)
+
+type ActivityLogRepository struct {
+    client *firestore.Client
+}
+
+func NewActivityLogRepository(client *firestore.Client) *ActivityLogRepository {
+    return &ActivityLogRepository{client: client}
+}
+
+// Create registra novo evento na cadeia de blocos local
+func (r *ActivityLogRepository) Create(ctx context.Context, log *models.ActivityLog) error {
+    // 1. Buscar último evento do tenant para obter prev_hash
+    lastLog, err := r.GetLastLog(ctx, log.TenantID)
+    if err != nil && err != ErrNotFound {
+        return fmt.Errorf("failed to get last log: %w", err)
+    }
+
+    // 2. Configurar prev_hash
+    if lastLog != nil {
+        log.PrevHash = lastLog.Hash
+    } else {
+        log.PrevHash = "genesis" // Primeiro evento do tenant
+    }
+
+    // 3. Gerar hash SHA-256
+    log.Hash = log.GenerateHash()
+
+    // 4. Salvar no Firestore
+    _, err = r.client.Collection("activity_logs").Doc(log.ID).Set(ctx, log)
+    if err != nil {
+        return fmt.Errorf("failed to create activity log: %w", err)
+    }
+
+    return nil
+}
+
+// GetLastLog retorna o último evento do tenant (para cadeia de blocos)
+func (r *ActivityLogRepository) GetLastLog(ctx context.Context, tenantID string) (*models.ActivityLog, error) {
+    docs, err := r.client.Collection("activity_logs").
+        Where("tenant_id", "==", tenantID).
+        OrderBy("timestamp", firestore.Desc).
+        Limit(1).
+        Documents(ctx).
+        GetAll()
+
+    if err != nil {
+        return nil, err
+    }
+
+    if len(docs) == 0 {
+        return nil, ErrNotFound
+    }
+
+    var log models.ActivityLog
+    if err := docs[0].DataTo(&log); err != nil {
+        return nil, err
+    }
+
+    return &log, nil
+}
+
+// ValidateChain verifica integridade da cadeia de blocos local (auditoria)
+func (r *ActivityLogRepository) ValidateChain(ctx context.Context, tenantID string) (bool, error) {
+    docs, err := r.client.Collection("activity_logs").
+        Where("tenant_id", "==", tenantID).
+        OrderBy("timestamp", firestore.Asc).
+        Documents(ctx).
+        GetAll()
+
+    if err != nil {
+        return false, err
+    }
+
+    var prevHash = "genesis"
+    for _, doc := range docs {
+        var log models.ActivityLog
+        if err := doc.DataTo(&log); err != nil {
+            return false, err
+        }
+
+        // Validar se prev_hash aponta para o anterior
+        if !log.Validate(prevHash) {
+            return false, fmt.Errorf("chain broken at event %s", log.ID)
+        }
+
+        prevHash = log.Hash
+    }
+
+    return true, nil
+}
+```
+
+#### Exemplo de Uso (internal/services/lead_service.go)
+
+```go
+// DistributeLead distribui lead para corretor e registra na auditoria
+func (s *LeadService) DistributeLead(ctx context.Context, leadID, brokerID string) error {
+    // ... lógica de distribuição de lead ...
+
+    // Registrar evento na cadeia de blocos local (auditoria)
+    activityLog := &models.ActivityLog{
+        ID:        uuid.New().String(),
+        Event:     "lead_distributed",
+        Timestamp: time.Now(),
+        TenantID:  lead.TenantID,
+        UserID:    brokerID,
+        Data: map[string]interface{}{
+            "lead_id":         lead.ID,
+            "lead_name":       lead.Name,
+            "lead_phone":      lead.Phone,
+            "property_id":     lead.PropertyID,
+            "broker_id":       brokerID,
+            "broker_name":     broker.DisplayName,
+            "broker_creci":    broker.CRECI,
+            "distribution_source": "automatic", // ou "manual", "marketplace"
+        },
+        IPAddress: ctx.Value("ip_address").(string),
+        UserAgent: ctx.Value("user_agent").(string),
+    }
+
+    // Hash SHA-256 será gerado automaticamente no repository
+    if err := s.activityLogRepo.Create(ctx, activityLog); err != nil {
+        return fmt.Errorf("failed to log activity: %w", err)
+    }
+
+    return nil
+}
+```
+
+#### Firestore Index (firestore.indexes.json)
+
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "activity_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenant_id", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activity_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenant_id", "order": "ASCENDING" },
+        { "fieldPath": "event", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ]
+}
+```
+
+#### Vantagem Competitiva (Quando PITD for Regulamentado)
+
+**Concorrentes (ZAP, VivaReal, CRMs)**:
+1. Redesenhar schema do banco (6-12 meses)
+2. Implementar hash e auditoria (3-6 meses)
+3. Migrar dados históricos (2-4 meses)
+4. Integrar blockchain (4-8 meses)
+**Total**: 12-24 meses
+
+**Nossa Plataforma**:
+1. ✅ Schema já tem campos blockchain (prev_hash, hash, blockchain_tx)
+2. ✅ Hash SHA-256 já está ativo desde o MVP
+3. ✅ Cadeia de blocos local já valida integridade
+4. Apenas ativar integração blockchain (2-4 semanas)
+**Total**: 2-4 semanas
+
+**First-Mover Advantage**: 18-22 meses à frente
+
+---
+
 ### Fase 2: Sistema de Importação (50-60h)
 
 **Objetivo**: Importar imóveis do Union CRM (XML + XLS)

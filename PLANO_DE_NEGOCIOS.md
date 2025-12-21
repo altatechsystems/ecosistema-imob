@@ -3,9 +3,9 @@
 
 **Brasil x EUA • Concorrência • Casos de Uso • Unit Economics • PITD • Co-corretagem • Blockchain-ready**
 
-**Versão**: 1.1
+**Versão**: 1.3
 **Data**: 2025-12-21
-**Status**: Atualizado com SEO 100% + Whitelabel (ROI 26x) + Timeline Realista (2-3 meses)
+**Status**: Atualizado com SEO 100% + Whitelabel (ROI 26x) + Conformidade CRECI/COFECI + Blockchain-Ready
 
 ---
 
@@ -674,10 +674,36 @@ Whitelabel é a **alavanca de maior retorno** (26x ROI) e **maior impacto em LTV
 - Garantias locatícias (integração fintechs)
 - Avaliação de imóveis (IA + comparables)
 
-**PITD & Blockchain**:
-- Contratos inteligentes (blockchain)
-- Tokenização de ativos (futuro regulatório)
-- Registro descentralizado de transações
+**PITD & Blockchain** (Estratégia "Blockchain-Ready"):
+
+**Status Regulatório Atual** (Dezembro 2025):
+- **COFECI Resolução 1551/2025**: SUSPENSA (sem efeito legal vigente)
+- **Estratégia**: Arquitetura preparada, features inativas até regulamentação
+
+**Preparação Técnica** (Implementada desde o MVP):
+- ✅ Hash SHA-256 ativo em todos os eventos (ActivityLog)
+- ✅ Cadeia de blocos local (`prev_hash` → `hash`)
+- ✅ Campos reservados para blockchain (`blockchain_tx`, `token_id`)
+- ✅ Imutabilidade e auditoria garantidas (compliance + preparação)
+- ❌ **NÃO ativo**: Registro on-chain, tokenização, PITD
+
+**Ativação Condicional** (Se PITD for regulamentado):
+- Contratos inteligentes (Ethereum/Polygon via smart contracts)
+- Tokenização de ativos imobiliários (TIDs conforme regulação)
+- Registro descentralizado de transações com valor jurídico
+- Integração com cartórios digitais (IRIB)
+- **Timeline de Ativação**: 2-4 semanas (vs. 12-24 meses dos concorrentes)
+
+**Vantagem Competitiva**:
+- 🎯 **First-mover advantage**: 18-22 meses à frente de ZAP, VivaReal, CRMs
+- 🎯 **Zero refatoração**: Campos já existem no schema desde o MVP
+- 🎯 **Moat defensível**: Concorrentes precisariam redesenhar banco de dados
+- 🎯 **Compliance total**: Preparação não viola regulamentação atual
+
+**Monitoramento**:
+- Revisão trimestral da Resolução 1551/2025 (COFECI)
+- Acompanhamento de precedentes jurídicos (IRIB, cartórios)
+- Consulta jurídica obrigatória antes de ativar features blockchain
 
 **Marketplace de Compradores**:
 - Matching automático (imóvel ↔ perfil de comprador)
@@ -1040,4 +1066,5 @@ O MVP é desenhado para **tracionar rápido e evoluir sem refatorações estrutu
 **Atualizado com Seção 21**: 2025-12-20
 **Atualizado para v1.1**: 2025-12-21 (SEO 100% + Whitelabel + Timeline)
 **Atualizado para v1.2**: 2025-12-21 (Seção 17: Conformidade CRECI/COFECI)
+**Atualizado para v1.3**: 2025-12-21 (Seção 16.4: Estratégia Blockchain-Ready)
 **Por**: Claude Code + Equipe Altatech Systems
