@@ -330,7 +330,7 @@ Ver [VALIDACAO_FINAL.md](VALIDACAO_FINAL.md) para ordem detalhada.
 ## 📜 Documentos Principais
 
 ### Documentação de Negócio
-1. **[PLANO_DE_NEGOCIOS.md](PLANO_DE_NEGOCIOS.md)**: Plano de negócios completo v1.4 (SEO 100% + Whitelabel + Tokenização)
+1. **[PLANO_DE_NEGOCIOS.md](PLANO_DE_NEGOCIOS.md)**: Plano de negócios completo v1.6 (SEO 100% + Whitelabel + Lançamentos + Serviços Inovadores + Tokenização)
 2. **[ANALISE_CONFORMIDADE_CRECI_COFECI.md](ANALISE_CONFORMIDADE_CRECI_COFECI.md)**: Análise regulatória detalhada
 
 ### Documentação Técnica
@@ -378,6 +378,6 @@ Para dúvidas sobre implementação, consultar:
 
 ---
 
-**Versão**: 1.5
+**Versão**: 1.6
 **Data**: 2025-12-21
-**Status**: 🚀 Pronto para Implementação | SEO 100% | Whitelabel (ROI 26x) | Lançamentos (ROI 27x) | Tokenização Factível
+**Status**: 🚀 Pronto para Implementação | SEO 100% | Whitelabel (26x ROI) | Lançamentos (27x ROI) | Serviços Inovadores (R$ 2.3M/ano) | Tokenização Factível

@@ -269,7 +269,11 @@
       "Bash(git remote:*)",
       "Bash(cmd /c \"cmdkey /list | findstr github\")",
       "Bash(git credential-manager:*)",
-      "Bash(printf:*)"
+      "Bash(printf:*)",
+      "Bash(git -C \"C:\\\\Users\\\\danie\\\\OneDrive\\\\Documentos\\\\Altatech Systems\\\\ecosystem\\\\ecosistema-imob\" log --oneline --all)",
+      "Bash(git -C \"C:\\\\Users\\\\danie\\\\OneDrive\\\\Documentos\\\\Altatech Systems\\\\ecosystem\\\\ecosistema-imob\" show --stat 170ab3e)",
+      "Bash(git -C \"C:\\\\Users\\\\danie\\\\OneDrive\\\\Documentos\\\\Altatech Systems\\\\ecosystem\\\\ecosistema-imob\" diff --name-only HEAD~3 HEAD)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []
