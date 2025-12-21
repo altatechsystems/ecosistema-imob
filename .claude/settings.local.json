@@ -266,7 +266,10 @@
       "Bash(cmd /c \"timeout /t 3\")",
       "Bash(gh auth:*)",
       "Bash(git config:*)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(cmd /c \"cmdkey /list | findstr github\")",
+      "Bash(git credential-manager:*)",
+      "Bash(printf:*)"
     ],
     "deny": [],
     "ask": []
