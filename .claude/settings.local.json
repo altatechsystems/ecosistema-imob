@@ -281,7 +281,13 @@
       "Bash(go mod init:*)",
       "Bash(go vet:*)",
       "Bash(go fmt:*)",
-      "Bash(cmd /c \"if exist backend\\\\config\\\\firebase-adminsdk.json \\(echo Credenciais encontradas\\) else \\(echo Credenciais NAO encontradas - baixe do Firebase Console\\)\")"
+      "Bash(cmd /c \"if exist backend\\\\config\\\\firebase-adminsdk.json \\(echo Credenciais encontradas\\) else \\(echo Credenciais NAO encontradas - baixe do Firebase Console\\)\")",
+      "Bash(firebase logout:*)",
+      "Bash(firebase login:*)",
+      "Bash(firebase use:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(firebase init:*)",
+      "Bash(firebase deploy:*)"
     ],
     "deny": [],
     "ask": []
