@@ -13,12 +13,16 @@
 *.test
 *.out
 go.work
+backend/bin/
+bin/
 
 # Firebase
 .firebase/
 .firebaserc
 firebase-debug.log
 firestore-debug.log
+backend/config/firebase-adminsdk.json
+**/firebase-adminsdk*.json
 
 # Node.js
 node_modules/
@@ -48,6 +52,8 @@ Thumbs.db
 # Logs
 logs/
 *.log
+backend/*.log
+backend-*.log
 
 # Temp files
 tmp/
