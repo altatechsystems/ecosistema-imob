@@ -194,45 +194,47 @@ export default function PropertyDetailsPage() {
 
       <div className="container mx-auto px-4 py-8">
         {/* Image Gallery - Zillow Style */}
-        <div className="grid grid-cols-4 gap-2 mb-8 h-[500px]">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-8">
           {/* Main Image - Left Side (takes 3 columns) */}
-          <div
-            className="col-span-4 md:col-span-3 relative rounded-lg overflow-hidden cursor-pointer group"
-            onClick={() => {
-              setCurrentImageIndex(0);
-              setIsLightboxOpen(true);
-            }}
-          >
-            {property.images && property.images.length > 0 ? (
-              <Image
-                src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
-                alt={property.title || 'Imóvel'}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-300"
-                priority
-              />
-            ) : (
-              <Image
-                src="/placeholder-property.jpg"
-                alt="Sem imagem"
-                fill
-                className="object-cover"
-              />
-            )}
-            {property.featured && (
-              <div className="absolute top-4 left-4">
-                <Badge variant="featured">Destaque</Badge>
-              </div>
-            )}
+          <div className="col-span-1 md:col-span-3">
+            <div
+              className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
+              onClick={() => {
+                setCurrentImageIndex(0);
+                setIsLightboxOpen(true);
+              }}
+            >
+              {property.images && property.images.length > 0 ? (
+                <Image
+                  src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
+                  alt={property.title || 'Imóvel'}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  priority
+                />
+              ) : (
+                <Image
+                  src="/placeholder-property.jpg"
+                  alt="Sem imagem"
+                  fill
+                  className="object-cover"
+                />
+              )}
+              {property.featured && (
+                <div className="absolute top-4 left-4 z-10">
+                  <Badge variant="featured">Destaque</Badge>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Thumbnail Grid - Right Side (1 column on mobile, becomes visible on md) */}
+          {/* Thumbnail Grid - Right Side */}
           {property.images && property.images.length > 1 && (
-            <div className="hidden md:grid grid-rows-2 gap-2">
+            <div className="hidden md:grid grid-rows-2 gap-2 col-span-1">
               {/* Second Image */}
               {property.images[1] && (
                 <div
-                  className="relative rounded-lg overflow-hidden cursor-pointer group"
+                  className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
                   onClick={() => {
                     setCurrentImageIndex(1);
                     setIsLightboxOpen(true);
@@ -250,7 +252,7 @@ export default function PropertyDetailsPage() {
               {/* Third Image or "See all photos" button */}
               {property.images[2] && (
                 <div
-                  className="relative rounded-lg overflow-hidden cursor-pointer group"
+                  className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
                   onClick={() => {
                     setCurrentImageIndex(2);
                     setIsLightboxOpen(true);
@@ -263,7 +265,7 @@ export default function PropertyDetailsPage() {
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   {property.images.length > 3 && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center hover:bg-black/70 transition-colors z-10">
                       <div className="text-white text-center">
                         <Maximize2 className="w-8 h-8 mx-auto mb-2" />
                         <p className="text-sm font-semibold">Ver todas</p>
