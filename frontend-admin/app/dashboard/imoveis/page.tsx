@@ -399,9 +399,13 @@ export default function ImoveisPage() {
         <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
           {displayedProperties.map((property) => (
-            <div key={property.id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+            <div
+              key={property.id}
+              onClick={() => router.push(`/dashboard/imoveis/${property.id}`)}
+              className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-all cursor-pointer group"
+            >
               {/* Property Image */}
-              <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
+              <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden group-hover:brightness-95 transition-all">
                 {property.image_url ? (
                   <Image
                     src={property.image_url}
@@ -465,12 +469,9 @@ export default function ImoveisPage() {
                   <span className="text-xl font-bold text-gray-900">
                     {property.price_amount ? formatPrice(property.price_amount) : 'Preço não informado'}
                   </span>
-                  <button
-                    onClick={() => router.push(`/dashboard/imoveis/${property.id}`)}
-                    className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
+                  <span className="px-4 py-2 text-sm text-blue-600 group-hover:bg-blue-50 rounded-lg transition-colors">
                     Ver detalhes
-                  </button>
+                  </span>
                 </div>
               </div>
             </div>
