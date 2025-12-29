@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Building2, Plus, Search, Filter, MapPin, Bed, Bath, Maximize } from 'lucide-react';
 
 interface Property {
@@ -27,12 +28,10 @@ export default function ImoveisPage() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
-  useEffect(() => {
-    fetchProperties();
-  }, []);
-
-  const fetchProperties = async () => {
+  const fetchProperties = useCallback(async () => {
     try {
       setLoading(true);
       const tenantId = localStorage.getItem('tenant_id');
@@ -74,7 +73,11 @@ export default function ImoveisPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchProperties();
+  }, [fetchProperties]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -83,12 +86,35 @@ export default function ImoveisPage() {
     }).format(price);
   };
 
-  const filteredProperties = properties.filter(property =>
-    property.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    property.street?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    property.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    property.neighborhood?.toLowerCase().includes(searchTerm.toLowerCase())
+  // Memoize expensive calculations
+  const stats = useMemo(() => ({
+    total: properties.length,
+    available: properties.filter(p => p.status?.toLowerCase() === 'available').length,
+    apartments: properties.filter(p => p.property_type?.toLowerCase() === 'apartment').length,
+    houses: properties.filter(p => p.property_type?.toLowerCase() === 'house').length,
+  }), [properties]);
+
+  const filteredProperties = useMemo(() =>
+    properties.filter(property =>
+      property.reference?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      property.street?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      property.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      property.neighborhood?.toLowerCase().includes(searchTerm.toLowerCase())
+    ),
+    [properties, searchTerm]
   );
+
+  // Pagination
+  const totalPages = Math.ceil(filteredProperties.length / itemsPerPage);
+  const paginatedProperties = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredProperties.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredProperties, currentPage, itemsPerPage]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   return (
     <div className="p-6">
@@ -104,7 +130,7 @@ export default function ImoveisPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total de Imóveis</p>
-              <p className="text-2xl font-bold text-gray-900">{properties.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
               <Building2 className="w-6 h-6 text-blue-600" />
@@ -117,7 +143,7 @@ export default function ImoveisPage() {
             <div>
               <p className="text-sm text-gray-600">Disponíveis</p>
               <p className="text-2xl font-bold text-green-600">
-                {properties.filter(p => p.status?.toLowerCase() === 'available').length}
+                {stats.available}
               </p>
             </div>
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
@@ -131,7 +157,7 @@ export default function ImoveisPage() {
             <div>
               <p className="text-sm text-gray-600">Apartamentos</p>
               <p className="text-2xl font-bold text-orange-600">
-                {properties.filter(p => p.property_type?.toLowerCase() === 'apartment').length}
+                {stats.apartments}
               </p>
             </div>
             <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
@@ -145,7 +171,7 @@ export default function ImoveisPage() {
             <div>
               <p className="text-sm text-gray-600">Casas</p>
               <p className="text-2xl font-bold text-purple-600">
-                {properties.filter(p => p.property_type?.toLowerCase() === 'house').length}
+                {stats.houses}
               </p>
             </div>
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -228,16 +254,21 @@ export default function ImoveisPage() {
 
       {/* Properties Grid */}
       {!loading && !error && filteredProperties.length > 0 && (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-          {filteredProperties.map((property) => (
+          {paginatedProperties.map((property) => (
             <div key={property.id} className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow">
               {/* Property Image */}
               <div className="h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center relative overflow-hidden">
                 {property.image_url ? (
-                  <img
+                  <Image
                     src={property.image_url}
                     alt={property.reference || 'Imóvel'}
-                    className="w-full h-full object-cover"
+                    fill
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-cover"
+                    loading="lazy"
+                    quality={75}
                   />
                 ) : (
                   <Building2 className="w-16 h-16 text-white opacity-50" />
@@ -303,6 +334,61 @@ export default function ImoveisPage() {
             </div>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProperties.length)} de {filteredProperties.length} imóveis
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Anterior
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`px-3 py-2 rounded-lg transition-colors ${
+                          currentPage === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   );
