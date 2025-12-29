@@ -210,8 +210,10 @@ export default function PropertyDetailsPage() {
                     src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
                     alt={property.title || 'Imóvel'}
                     fill
+                    sizes="(max-width: 768px) 100vw, 66vw"
                     className="object-cover"
                     priority
+                    quality={85}
                   />
                 ) : (
                   <Image
@@ -245,7 +247,10 @@ export default function PropertyDetailsPage() {
                       src={property.images[1].medium_url}
                       alt={`${property.title} - Foto 2`}
                       fill
+                      sizes="16vw"
                       className="object-cover"
+                      priority
+                      quality={80}
                     />
                   </div>
                 )}
@@ -263,7 +268,10 @@ export default function PropertyDetailsPage() {
                       src={property.images[2].medium_url}
                       alt={`${property.title} - Foto 3`}
                       fill
+                      sizes="16vw"
                       className="object-cover"
+                      priority
+                      quality={80}
                     />
                   </div>
                 )}
@@ -281,7 +289,10 @@ export default function PropertyDetailsPage() {
                       src={property.images[3].medium_url}
                       alt={`${property.title} - Foto 4`}
                       fill
+                      sizes="16vw"
                       className="object-cover"
+                      priority
+                      quality={80}
                     />
                   </div>
                 )}
@@ -299,7 +310,10 @@ export default function PropertyDetailsPage() {
                       src={property.images[4].medium_url}
                       alt={`${property.title} - Foto 5`}
                       fill
+                      sizes="16vw"
                       className="object-cover"
+                      priority
+                      quality={80}
                     />
                     {property.images.length > 5 && (
                       <div className="absolute inset-0 bg-black/70 flex items-center justify-center group-hover:bg-black/80 transition-colors">
@@ -488,7 +502,24 @@ export default function PropertyDetailsPage() {
                 width={1600}
                 height={1200}
                 className="max-w-full max-h-full object-contain"
+                priority
+                quality={85}
               />
+              {/* Preload next and previous images */}
+              {property.images[(currentImageIndex + 1) % property.images.length] && (
+                <link
+                  rel="preload"
+                  as="image"
+                  href={property.images[(currentImageIndex + 1) % property.images.length].large_url}
+                />
+              )}
+              {property.images[(currentImageIndex - 1 + property.images.length) % property.images.length] && (
+                <link
+                  rel="preload"
+                  as="image"
+                  href={property.images[(currentImageIndex - 1 + property.images.length) % property.images.length].large_url}
+                />
+              )}
             </div>
 
             {/* Navigation Arrows */}
@@ -528,7 +559,10 @@ export default function PropertyDetailsPage() {
                     src={image.thumb_url}
                     alt={`Thumbnail ${index + 1}`}
                     fill
+                    sizes="80px"
                     className="object-cover"
+                    loading={index < 5 ? 'eager' : 'lazy'}
+                    quality={50}
                   />
                 </button>
               ))}

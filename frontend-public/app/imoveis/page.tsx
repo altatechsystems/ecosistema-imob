@@ -20,11 +20,7 @@ export default function PropertiesPage() {
     // visibility: PropertyVisibility.PUBLIC,
   });
 
-  React.useEffect(() => {
-    loadProperties();
-  }, [filters]);
-
-  const loadProperties = async () => {
+  const loadProperties = React.useCallback(async () => {
     try {
       setIsLoading(true);
       const result = await api.getProperties(filters, { limit: 500 });
@@ -34,7 +30,11 @@ export default function PropertiesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters]);
+
+  React.useEffect(() => {
+    loadProperties();
+  }, [loadProperties]);
 
   const handleClearFilters = () => {
     setFilters({

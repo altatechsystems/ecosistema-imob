@@ -25,7 +25,7 @@ export interface PropertyCardProps {
   onWhatsAppClick?: (property: Property) => void;
 }
 
-export function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: PropertyCardProps) {
+export const PropertyCard = React.memo(function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: PropertyCardProps) {
   const [isCreatingLead, setIsCreatingLead] = React.useState(false);
   const price = property.sale_price || property.rental_price;
   const priceLabel = property.transaction_type === 'rent' ? 'Aluguel' : 'Venda';
@@ -229,4 +229,4 @@ export function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: Pr
       </Link>
     </Card>
   );
-}
+});
