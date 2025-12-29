@@ -12,9 +12,11 @@ import (
 
 // PropertyPayload represents normalized property data ready for import
 type PropertyPayload struct {
-	Property models.Property
-	Owner    OwnerPayload
-	Photos   []string // URLs from XML
+	Property    models.Property
+	Owner       OwnerPayload
+	Photos      []string // URLs from XML
+	Title       string   // Título do anúncio (from XML)
+	Description string   // Descrição completa do anúncio (from XML)
 }
 
 // OwnerPayload represents owner data (may be incomplete/placeholder)
@@ -165,10 +167,23 @@ func NormalizeProperty(xml *XMLImovel, xls *XLSRecord, tenantID string) Property
 	// Build owner payload
 	owner := buildOwnerPayload(xml, xls)
 
+	// Extract title and description from XML
+	title := xml.Titulo
+	if title == "" {
+		title = fmt.Sprintf("Imóvel %s", xml.Referencia)
+	}
+
+	description := xml.Anuncioparainternet
+	if description == "" {
+		description = fmt.Sprintf("Imóvel importado - Ref: %s", xml.Referencia)
+	}
+
 	payload := PropertyPayload{
-		Property: property,
-		Owner:    owner,
-		Photos:   photoURLs,
+		Property:    property,
+		Owner:       owner,
+		Photos:      photoURLs,
+		Title:       title,
+		Description: description,
 	}
 
 	return payload

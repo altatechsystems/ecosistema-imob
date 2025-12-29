@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -87,7 +88,7 @@ func (s *ImportService) ImportProperty(ctx context.Context, batch *models.Import
 
 			// Use the existing property from database
 			property := dedupResult.ExistingProperty
-			newListingID, err := s.createListing(ctx, batch.TenantID, property, payload.Photos)
+			newListingID, err := s.createListing(ctx, batch.TenantID, property, payload.Photos, payload.Title, payload.Description)
 			if err != nil {
 				log.Printf("❌ Failed to create listing for existing property %s: %v", payload.Property.Reference, err)
 			} else {
@@ -165,7 +166,7 @@ func (s *ImportService) ImportProperty(ctx context.Context, batch *models.Import
 	})
 
 	// 4. Create Listing
-	listingID, err := s.createListing(ctx, batch.TenantID, &payload.Property, payload.Photos)
+	listingID, err := s.createListing(ctx, batch.TenantID, &payload.Property, payload.Photos, payload.Title, payload.Description)
 	if err != nil {
 		return fmt.Errorf("failed to create listing: %w", err)
 	}
@@ -212,17 +213,53 @@ func (s *ImportService) ImportProperty(ctx context.Context, batch *models.Import
 }
 
 // processPhotosAsync processes photos in background and updates listing
+// Uses a worker pool to limit concurrent photo processing
 func (s *ImportService) processPhotosAsync(ctx context.Context, batch *models.ImportBatch, listingID string, payload union.PropertyPayload) {
-	processedPhotos, errors := s.photoProcessor.ProcessPhotosBatch(ctx, batch.TenantID, payload.Property.ID, payload.Photos)
+	const maxConcurrentPhotos = 5 // Limit concurrent photo downloads/processing
 
-	// Count successful photos
-	batch.TotalPhotosProcessed += len(processedPhotos)
+	semaphore := make(chan struct{}, maxConcurrentPhotos)
+	processedPhotos := make([]models.Photo, 0, len(payload.Photos))
+	photosMutex := &sync.Mutex{}
+	errorCount := 0
 
-	// Log errors
-	for _, err := range errors {
-		log.Printf("❌ Photo processing error for property %s: %v", payload.Property.Reference, err)
-		batch.TotalErrors++
+	var wg sync.WaitGroup
+
+	for i, photoURL := range payload.Photos {
+		if photoURL == "" {
+			continue
+		}
+
+		wg.Add(1)
+		go func(url string, order int) {
+			defer wg.Done()
+
+			// Acquire semaphore
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			// Process single photo
+			photo, err := s.photoProcessor.ProcessPhoto(ctx, batch.TenantID, payload.Property.ID, url, order)
+			if err != nil {
+				log.Printf("❌ Photo processing error for property %s, photo %d: %v", payload.Property.Reference, order, err)
+				photosMutex.Lock()
+				errorCount++
+				photosMutex.Unlock()
+				return
+			}
+
+			// Add to results
+			photosMutex.Lock()
+			processedPhotos = append(processedPhotos, photo)
+			photosMutex.Unlock()
+		}(photoURL, i)
 	}
+
+	// Wait for all photos to complete
+	wg.Wait()
+
+	// Update batch stats
+	batch.TotalPhotosProcessed += len(processedPhotos)
+	batch.TotalErrors += errorCount
 
 	// Update listing with processed photos
 	if len(processedPhotos) > 0 {
@@ -325,7 +362,7 @@ func (s *ImportService) createProperty(ctx context.Context, property *models.Pro
 }
 
 // createListing creates a listing for the property
-func (s *ImportService) createListing(ctx context.Context, tenantID string, property *models.Property, photoURLs []string) (string, error) {
+func (s *ImportService) createListing(ctx context.Context, tenantID string, property *models.Property, photoURLs []string, title string, description string) (string, error) {
 	now := time.Now()
 	listingID := uuid.New().String()
 
@@ -348,7 +385,7 @@ func (s *ImportService) createListing(ctx context.Context, tenantID string, prop
 		photos = append(photos, photo)
 	}
 
-	// For imports, create a system listing with minimal content
+	// For imports, create a system listing with content from XML
 	// The broker can edit this later to create their own listing
 	listing := models.Listing{
 		ID:         listingID,
@@ -356,9 +393,9 @@ func (s *ImportService) createListing(ctx context.Context, tenantID string, prop
 		PropertyID: property.ID,
 		BrokerID:   "system", // System-generated listing from import
 
-		// Basic content - use property reference as title
-		Title:       fmt.Sprintf("Imóvel %s", property.Reference),
-		Description: fmt.Sprintf("Imóvel importado - Ref: %s", property.Reference),
+		// Content from XML (title and description)
+		Title:       title,
+		Description: description,
 
 		// Photos
 		Photos: photos,
