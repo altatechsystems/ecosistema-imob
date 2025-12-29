@@ -374,7 +374,8 @@
       "Bash(node cleanup-orphaned-listing-refs.js:*)",
       "Bash(timeout /t 3)",
       "Bash(node -e:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []

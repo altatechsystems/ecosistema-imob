@@ -16,6 +16,8 @@ import {
   buildWhatsAppUrl,
 } from '@/lib/utils';
 import { Bed, Bath, Car, MapPin, Maximize2, MessageCircle } from 'lucide-react';
+import { api } from '@/lib/api';
+import { LeadChannel } from '@/types/lead';
 
 export interface PropertyCardProps {
   property: Property;
@@ -24,19 +26,50 @@ export interface PropertyCardProps {
 }
 
 export function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: PropertyCardProps) {
+  const [isCreatingLead, setIsCreatingLead] = React.useState(false);
   const price = property.sale_price || property.rental_price;
   const priceLabel = property.transaction_type === 'rent' ? 'Aluguel' : 'Venda';
 
-  const handleWhatsAppClick = (e: React.MouseEvent) => {
+  const handleWhatsAppClick = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const message = `Olá! Tenho interesse no imóvel: ${property.title || getPropertyTypeLabel(property.property_type)} - ${property.city}`;
-    const whatsappUrl = buildWhatsAppUrl(process.env.NEXT_PUBLIC_WHATSAPP || '', message);
 
-    if (onWhatsAppClick) {
-      onWhatsAppClick(property);
+    if (isCreatingLead) return;
+
+    try {
+      setIsCreatingLead(true);
+
+      // 1. Criar Lead PRIMEIRO (conforme AI_DEV_DIRECTIVE Section 8)
+      const leadResponse = await api.createLead({
+        property_id: property.id!,
+        name: 'Lead via WhatsApp',
+        phone: '',
+        channel: LeadChannel.WHATSAPP,
+        consent_given: true,
+        consent_text: 'Consentimento implícito ao clicar em "Falar no WhatsApp"',
+        consent_date: new Date().toISOString(),
+      });
+
+      // 2. Callback opcional
+      if (onWhatsAppClick) {
+        onWhatsAppClick(property);
+      }
+
+      // 3. Construir mensagem com Lead ID
+      const reference = property.reference || property.title || `${getPropertyTypeLabel(property.property_type)} - ${property.city}`;
+      const message = `Olá! Tenho interesse no imóvel ${reference}.\n\nLead ID: #${leadResponse.data.id}`;
+      const whatsappUrl = buildWhatsAppUrl(process.env.NEXT_PUBLIC_WHATSAPP || '', message);
+
+      // 4. Redirecionar para WhatsApp
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Erro ao criar lead:', error);
+      // Fallback: abrir WhatsApp mesmo sem Lead (não ideal)
+      const message = `Olá! Tenho interesse no imóvel: ${property.title || getPropertyTypeLabel(property.property_type)} - ${property.city}`;
+      const whatsappUrl = buildWhatsAppUrl(process.env.NEXT_PUBLIC_WHATSAPP || '', message);
+      window.open(whatsappUrl, '_blank');
+    } finally {
+      setIsCreatingLead(false);
     }
-
-    window.open(whatsappUrl, '_blank');
   };
 
   const features = [

@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isTenantUser(tenantId) {
+      return isAuthenticated() && request.auth.token.tenant_id == tenantId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == 'admin';
+    }
+
+    // Tenants collection - only system admins can manage
+    match /tenants/{tenantId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Properties - public read, authenticated write
+    match /properties/{propertyId} {
+      allow read: if true; // Public read for frontend
+      allow create, update, delete: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Listings - same as properties
+    match /listings/{listingId} {
+      allow read: if true; // Public read for frontend
+      allow create, update, delete: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Leads - public create (for forms), authenticated read/update
+    match /leads/{leadId} {
+      allow create: if true; // Allow public lead creation from website forms
+      allow read, update, delete: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Brokers - authenticated only
+    match /brokers/{brokerId} {
+      allow read, write: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Owners - authenticated only
+    match /owners/{ownerId} {
+      allow read, write: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Property Broker Roles - authenticated only
+    match /property_broker_roles/{roleId} {
+      allow read, write: if isTenantUser(resource.data.tenant_id);
+    }
+
+    // Activity Logs - authenticated read only
+    match /activity_logs/{logId} {
+      allow read: if isTenantUser(resource.data.tenant_id);
+      allow create: if isAuthenticated(); // System can create logs
+      allow update, delete: if false; // Logs are immutable
+    }
+  }
+}

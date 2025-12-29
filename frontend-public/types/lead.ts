@@ -46,12 +46,18 @@ export interface Lead {
 
 export interface CreateLeadRequest {
   property_id: string;
-  name: string;
+  name?: string;
   email?: string;
-  phone: string;
+  phone?: string;
   message?: string;
   channel: LeadChannel;
-  consent_text: string;
+  consent_given?: boolean;
+  consent_text?: string;
+  consent_date?: Date | string;
+  utm_source?: string;
+  utm_campaign?: string;
+  utm_medium?: string;
+  referrer?: string;
 }
 
 export interface CreateLeadResponse {

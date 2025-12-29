@@ -338,14 +338,16 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 	handlers.TenantHandler.RegisterRoutes(router)
 
 	// Public routes FIRST (no authentication) - frontend público
+	// Apply strict rate limiting to public endpoints to prevent abuse
 	public := api.Group("/:tenant_id")
+	public.Use(middleware.StrictRateLimit())
 	{
 		// Public property endpoints
 		public.GET("/properties", handlers.PropertyHandler.ListProperties)
 		public.GET("/properties/:id", handlers.PropertyHandler.GetProperty)
 		public.GET("/properties/slug/:slug", handlers.PropertyHandler.GetPropertyBySlug)
 
-		// Public lead creation
+		// Public lead creation (extra strict - prevent spam)
 		public.POST("/leads", handlers.LeadHandler.CreateLead)
 
 		// Public images
@@ -356,6 +358,7 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 	// Protected routes (require authentication) - admin dashboard
 	protected := api.Group("/admin")
 	protected.Use(authMiddleware.AuthRequired())
+	protected.Use(middleware.RateLimit()) // Less strict for authenticated users
 	{
 		tenantScoped := protected.Group("/:tenant_id")
 		tenantScoped.Use(tenantMiddleware.ValidateTenant())

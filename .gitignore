@@ -16,13 +16,18 @@ go.work
 backend/bin/
 bin/
 
-# Firebase
+# Firebase & Secrets (CRITICAL - Never commit!)
 .firebase/
 .firebaserc
 firebase-debug.log
 firestore-debug.log
 backend/config/firebase-adminsdk.json
 **/firebase-adminsdk*.json
+**/*serviceAccount*.json
+**/*service-account*.json
+**/*credentials*.json
+.gcp/
+gcloud/
 
 # Node.js
 node_modules/
