@@ -44,6 +44,7 @@ export default function PropertyDetailsPage() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isCreatingLead, setIsCreatingLead] = React.useState(false);
   const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
+  const [isLightboxOpen, setIsLightboxOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (slug) {
@@ -192,49 +193,86 @@ export default function PropertyDetailsPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Image Gallery */}
-        <div className="relative w-full h-96 md:h-[500px] mb-8 rounded-lg overflow-hidden bg-gray-900">
-          {property.images && property.images.length > 0 ? (
-            <>
+        {/* Image Gallery - Zillow Style */}
+        <div className="grid grid-cols-4 gap-2 mb-8 h-[500px]">
+          {/* Main Image - Left Side (takes 3 columns) */}
+          <div
+            className="col-span-4 md:col-span-3 relative rounded-lg overflow-hidden cursor-pointer group"
+            onClick={() => {
+              setCurrentImageIndex(0);
+              setIsLightboxOpen(true);
+            }}
+          >
+            {property.images && property.images.length > 0 ? (
               <Image
-                src={property.images[currentImageIndex]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
+                src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
                 alt={property.title || 'Imóvel'}
                 fill
-                className="object-contain"
+                className="object-cover group-hover:scale-105 transition-transform duration-300"
                 priority
               />
-              {property.images.length > 1 && (
-                <>
-                  <button
-                    onClick={prevImage}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full"
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </button>
-                  <button
-                    onClick={nextImage}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full"
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </button>
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
-                    {currentImageIndex + 1} / {property.images.length}
-                  </div>
-                </>
-              )}
-            </>
-          ) : (
-            <Image
-              src="/placeholder-property.jpg"
-              alt="Sem imagem"
-              fill
-              className="object-cover"
-            />
-          )}
+            ) : (
+              <Image
+                src="/placeholder-property.jpg"
+                alt="Sem imagem"
+                fill
+                className="object-cover"
+              />
+            )}
+            {property.featured && (
+              <div className="absolute top-4 left-4">
+                <Badge variant="featured">Destaque</Badge>
+              </div>
+            )}
+          </div>
 
-          {property.featured && (
-            <div className="absolute top-4 left-4">
-              <Badge variant="featured">Destaque</Badge>
+          {/* Thumbnail Grid - Right Side (1 column on mobile, becomes visible on md) */}
+          {property.images && property.images.length > 1 && (
+            <div className="hidden md:grid grid-rows-2 gap-2">
+              {/* Second Image */}
+              {property.images[1] && (
+                <div
+                  className="relative rounded-lg overflow-hidden cursor-pointer group"
+                  onClick={() => {
+                    setCurrentImageIndex(1);
+                    setIsLightboxOpen(true);
+                  }}
+                >
+                  <Image
+                    src={property.images[1].medium_url}
+                    alt={`${property.title} - Foto 2`}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+              )}
+
+              {/* Third Image or "See all photos" button */}
+              {property.images[2] && (
+                <div
+                  className="relative rounded-lg overflow-hidden cursor-pointer group"
+                  onClick={() => {
+                    setCurrentImageIndex(2);
+                    setIsLightboxOpen(true);
+                  }}
+                >
+                  <Image
+                    src={property.images[2].medium_url}
+                    alt={`${property.title} - Foto 3`}
+                    fill
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                  {property.images.length > 3 && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <div className="text-white text-center">
+                        <Maximize2 className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-sm font-semibold">Ver todas</p>
+                        <p className="text-xs">{property.images.length} fotos</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -386,6 +424,79 @@ export default function PropertyDetailsPage() {
           </div>
         )}
       </div>
+
+      {/* Lightbox Modal */}
+      {isLightboxOpen && property?.images && property.images.length > 0 && (
+        <div
+          className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center"
+          onClick={() => setIsLightboxOpen(false)}
+        >
+          <button
+            onClick={() => setIsLightboxOpen(false)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10"
+          >
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div className="relative w-full h-full flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+            {/* Main Image */}
+            <div className="relative w-full max-w-6xl h-full max-h-[80vh] flex items-center justify-center">
+              <Image
+                src={property.images[currentImageIndex]?.large_url || property.cover_image_url || ''}
+                alt={`${property.title} - Foto ${currentImageIndex + 1}`}
+                width={1600}
+                height={1200}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+
+            {/* Navigation Arrows */}
+            {property.images.length > 1 && (
+              <>
+                <button
+                  onClick={() => setCurrentImageIndex((prev) => (prev - 1 + property.images!.length) % property.images!.length)}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
+                >
+                  <ChevronLeft className="w-8 h-8" />
+                </button>
+                <button
+                  onClick={() => setCurrentImageIndex((prev) => (prev + 1) % property.images!.length)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 hover:bg-white/30 text-white p-3 rounded-full"
+                >
+                  <ChevronRight className="w-8 h-8" />
+                </button>
+              </>
+            )}
+
+            {/* Image Counter */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white px-4 py-2 rounded-full text-sm">
+              {currentImageIndex + 1} / {property.images.length}
+            </div>
+
+            {/* Thumbnail Strip */}
+            <div className="absolute bottom-20 left-0 right-0 flex justify-center gap-2 px-4 overflow-x-auto max-w-full">
+              {property.images.map((image, index) => (
+                <button
+                  key={image.id}
+                  onClick={() => setCurrentImageIndex(index)}
+                  className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                    index === currentImageIndex ? 'border-white scale-110' : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <Image
+                    src={image.thumb_url}
+                    alt={`Thumbnail ${index + 1}`}
+                    fill
+                    className="object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
