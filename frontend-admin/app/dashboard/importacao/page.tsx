@@ -103,6 +103,7 @@ export default function ImportacaoPage() {
         throw new Error('Tenant ID não encontrado');
       }
 
+      console.log('🔐 Getting Firebase auth token...');
       // Get Firebase auth token
       const { auth } = await import('@/lib/firebase');
       const user = auth.currentUser;
@@ -111,6 +112,7 @@ export default function ImportacaoPage() {
       }
       // Force token refresh to ensure it's valid
       const token = await user.getIdToken(true);
+      console.log('✅ Token obtained');
 
       const formData = new FormData();
       formData.append('xml', xmlFile);
@@ -122,30 +124,34 @@ export default function ImportacaoPage() {
       formData.append('source', source);
       formData.append('created_by', brokerId || 'system');
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/api/v1/admin/${tenantId}/import/properties`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: formData,
-        }
-      );
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/import/properties`;
+      console.log('📤 Sending import request to:', url);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      console.log('📥 Response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erro ao importar arquivo' }));
-        throw new Error(errorData.error || 'Erro ao importar arquivo');
+        console.error('❌ Error response:', errorData);
+        throw new Error(errorData.error || `Erro ao importar arquivo (${response.status})`);
       }
 
       const data = await response.json();
+      console.log('✅ Import response:', data);
 
       // Backend returns async response with batch_id
       // Start polling for batch status
       setBatchId(data.batch_id);
       startPolling(data.batch_id, tenantId);
     } catch (error: any) {
-      console.error('Erro na importação:', error);
+      console.error('❌ Erro na importação:', error);
       setResult({
         success: false,
         total: 0,
@@ -162,7 +168,6 @@ export default function ImportacaoPage() {
         ],
         duration: (Date.now() - startTime) / 1000,
       });
-    } finally {
       setImporting(false);
     }
   };
@@ -193,7 +198,7 @@ export default function ImportacaoPage() {
     const interval = setInterval(async () => {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '')}/api/v1/admin/${tenantId}/import/batches/${batchId}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/import/batches/${batchId}`,
           {
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -256,8 +261,57 @@ export default function ImportacaoPage() {
         <p className="text-gray-600">Importe imóveis a partir de arquivos XML ou Excel (Union)</p>
       </div>
 
+      {/* Progress Indicator */}
+      {importing && (
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="text-center">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+              <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Importando Imóveis...
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Processando arquivo XML e criando imóveis no sistema. Isso pode levar alguns minutos.
+            </p>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
+              <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+            </div>
+
+            {batchId && (
+              <div className="text-xs text-gray-500">
+                Batch ID: {batchId}
+              </div>
+            )}
+
+            <div className="mt-6 grid grid-cols-3 gap-4 text-sm">
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-blue-600 font-medium">Lendo XML</p>
+                <div className="mt-2 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                </div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-blue-600 font-medium">Criando Imóveis</p>
+                <div className="mt-2 flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                </div>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-gray-400 font-medium">Processando Fotos</p>
+                <div className="mt-2 flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Upload Area */}
-      {!result && (
+      {!result && !importing && (
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           {/* Source Selector */}
           <div className="mb-6">

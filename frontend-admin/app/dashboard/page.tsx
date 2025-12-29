@@ -37,8 +37,38 @@ export default function DashboardPage() {
   const loadMetrics = async () => {
     try {
       setLoading(true);
-      const data = await adminApi.getDashboardMetrics();
-      setMetrics(data);
+
+      // Buscar dados diretamente das APIs existentes
+      const tenantId = localStorage.getItem('tenant_id');
+
+      if (!tenantId) {
+        console.error('Tenant ID não encontrado');
+        setLoading(false);
+        return;
+      }
+
+      // Buscar imóveis
+      const propertiesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties`);
+      const propertiesData = await propertiesResponse.json();
+      const properties = propertiesData.data || [];
+
+      // Calcular métricas
+      const totalProperties = properties.length;
+      const availableProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'available').length;
+      const soldProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'sold').length;
+      const rentedProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'rented').length;
+
+      setMetrics({
+        total_properties: totalProperties,
+        available_properties: availableProperties,
+        sold_properties: soldProperties,
+        rented_properties: rentedProperties,
+        total_leads: 0, // TODO: Implementar quando tiver endpoint de leads
+        new_leads: 0,
+        converted_leads: 0,
+        total_owners: 0,
+        total_brokers: 0,
+      });
     } catch (error) {
       console.error('Failed to load metrics:', error);
     } finally {

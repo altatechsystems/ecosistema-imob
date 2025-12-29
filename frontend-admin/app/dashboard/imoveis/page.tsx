@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Building2, Plus, Search, Filter, MapPin, Bed, Bath, Maximize } from 'lucide-react';
 
 interface Property {
@@ -21,6 +22,7 @@ interface Property {
 }
 
 export default function ImoveisPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,92 +44,30 @@ export default function ImoveisPage() {
         return;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties`);
+      // Add limit parameter to avoid timeout with large datasets
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?limit=1000`;
+      console.log('📍 Fetching from:', url);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Erro ao buscar imóveis');
       }
 
       const data = await response.json();
-      console.log('API Response:', data);
+      console.log('✅ API Response:', data);
+      console.log('📊 Total properties:', data.data?.length || 0);
 
-      // Por enquanto, definir propriedades sem buscar imagens
-      // TODO: Implementar busca de imagens quando houver imagens no Storage
-      setProperties(data.data || []);
-
-      // Buscar fotos do listing canonical de cada propriedade
+      // Set properties with cover_image_url from the API response
+      // The backend already includes cover_image_url for each property
       const propertiesData = data.data || [];
-      console.log('🔍 Properties count:', propertiesData.length);
+      const propertiesWithImages = propertiesData.map((property: any) => ({
+        ...property,
+        image_url: property.cover_image_url || undefined,
+      }));
 
-      if (propertiesData.length > 0) {
-        // Get Firebase auth token
-        const { auth } = await import('@/lib/firebase');
-        const user = auth.currentUser;
-        console.log('🔑 User:', user?.uid);
-
-        if (!user) {
-          console.warn('⚠️ No user authenticated');
-          return;
-        }
-
-        const token = await user.getIdToken(true);
-        console.log('🎫 Token obtained:', token.substring(0, 20) + '...');
-
-        // Count properties with canonical_listing_id
-        const withListings = propertiesData.filter((p: any) => p.canonical_listing_id);
-        console.log('📋 Properties with canonical_listing_id:', withListings.length);
-
-        // Buscar fotos para todos os imóveis que têm canonical_listing_id
-        await Promise.all(
-          propertiesData.map(async (property: any) => {
-            try {
-              if (!property.canonical_listing_id) {
-                console.log('⏭️ Property', property.reference, 'has no canonical_listing_id');
-                return;
-              }
-
-              const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/listings/${property.canonical_listing_id}`;
-              console.log('🌐 Fetching:', url);
-
-              const listingResponse = await fetch(url, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                },
-              });
-
-              console.log('📡 Response status:', listingResponse.status, 'for', property.reference);
-
-              if (listingResponse.ok) {
-                const listingData = await listingResponse.json();
-                console.log('📦 Listing data for', property.reference, ':', listingData);
-
-                if (listingData.success && listingData.data?.photos?.length > 0) {
-                  console.log('📸 Found', listingData.data.photos.length, 'photos for', property.reference);
-                  console.log('🖼️ First photo:', listingData.data.photos[0].thumb_url);
-
-                  // Usar a thumb_url da primeira foto
-                  setProperties(prev =>
-                    prev.map(p =>
-                      p.id === property.id
-                        ? { ...p, image_url: listingData.data.photos[0].thumb_url }
-                        : p
-                    )
-                  );
-                } else {
-                  console.log('❌ No photos in listing for', property.reference);
-                }
-              } else {
-                const errorText = await listingResponse.text();
-                console.error('❌ Failed to fetch listing:', listingResponse.status, errorText);
-              }
-            } catch (error) {
-              console.error('💥 Error fetching photos for property:', property.id, error);
-            }
-          })
-        );
-
-        console.log('✅ Finished fetching all photos');
-      }
+      setProperties(propertiesWithImages);
+      console.log('✅ Properties loaded with images');
     } catch (err: any) {
       console.error('Erro ao buscar imóveis:', err);
       setError(err.message);
@@ -156,6 +96,63 @@ export default function ImoveisPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Imóveis</h1>
         <p className="text-gray-600">Gerencie todos os imóveis cadastrados</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total de Imóveis</p>
+              <p className="text-2xl font-bold text-gray-900">{properties.length}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Disponíveis</p>
+              <p className="text-2xl font-bold text-green-600">
+                {properties.filter(p => p.status?.toLowerCase() === 'available').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Apartamentos</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {properties.filter(p => p.property_type?.toLowerCase() === 'apartment').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-orange-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Casas</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {properties.filter(p => p.property_type?.toLowerCase() === 'house').length}
+              </p>
+            </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-6 h-6 text-purple-600" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Actions Bar */}
@@ -295,7 +292,10 @@ export default function ImoveisPage() {
                   <span className="text-xl font-bold text-gray-900">
                     {property.price_amount ? formatPrice(property.price_amount) : 'Preço não informado'}
                   </span>
-                  <button className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                  <button
+                    onClick={() => router.push(`/dashboard/imoveis/${property.id}`)}
+                    className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
                     Ver detalhes
                   </button>
                 </div>
@@ -304,63 +304,6 @@ export default function ImoveisPage() {
           ))}
         </div>
       )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total de Imóveis</p>
-              <p className="text-2xl font-bold text-gray-900">{properties.length}</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Disponíveis</p>
-              <p className="text-2xl font-bold text-green-600">
-                {properties.filter(p => p.status?.toLowerCase() === 'available').length}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Apartamentos</p>
-              <p className="text-2xl font-bold text-orange-600">
-                {properties.filter(p => p.property_type?.toLowerCase() === 'apartment').length}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Casas</p>
-              <p className="text-2xl font-bold text-purple-600">
-                {properties.filter(p => p.property_type?.toLowerCase() === 'house').length}
-              </p>
-            </div>
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
