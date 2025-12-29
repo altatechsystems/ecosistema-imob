@@ -27,7 +27,7 @@ export default function PropertiesPage() {
   const loadProperties = async () => {
     try {
       setIsLoading(true);
-      const result = await api.getProperties(filters, { limit: 50 });
+      const result = await api.getProperties(filters, { limit: 500 });
       setProperties(result.data || []);
     } catch (error) {
       console.error('Failed to load properties:', error);

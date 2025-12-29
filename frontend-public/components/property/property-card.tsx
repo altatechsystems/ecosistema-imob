@@ -90,7 +90,10 @@ export function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: Pr
                 src={property.cover_image_url || '/placeholder-property.jpg'}
                 alt={property.title || `${getPropertyTypeLabel(property.property_type)} em ${property.city}`}
                 fill
+                sizes="(max-width: 768px) 100vw, 320px"
                 className="object-cover rounded-t-lg md:rounded-l-lg md:rounded-tr-none"
+                loading="lazy"
+                quality={75}
               />
               <div className="absolute top-3 left-3 flex gap-2">
                 {property.featured && (
@@ -166,7 +169,10 @@ export function PropertyCard({ property, variant = 'grid', onWhatsAppClick }: Pr
             src={property.cover_image_url || '/placeholder-property.jpg'}
             alt={property.title || `${getPropertyTypeLabel(property.property_type)} em ${property.city}`}
             fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-cover rounded-t-lg"
+            loading="lazy"
+            quality={75}
           />
           <div className="absolute top-3 left-3 flex gap-2">
             {property.featured && (
