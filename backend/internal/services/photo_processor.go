@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/jpeg"
 	_ "image/jpeg" // Register JPEG decoder
 	_ "image/png"  // Register PNG decoder
 	"io"
@@ -12,8 +13,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"time"
-
-	"image/jpeg"
 
 	"github.com/google/uuid"
 	"github.com/nfnt/resize"
@@ -95,8 +94,7 @@ func (p *PhotoProcessor) ProcessPhoto(ctx context.Context, tenantID, propertyID,
 		return models.Photo{}, fmt.Errorf("failed to decode image (format: %s, type: %s): %w", format, contentType, err)
 	}
 
-	// 3. Generate JPEG versions in different sizes
-	// TODO: Convert to WebP when proper library is configured
+	// 3. Generate JPEG versions in different sizes with optimized quality
 	thumbJPEG, err := p.convertToJPEG(img, SizeThumb)
 	if err != nil {
 		return models.Photo{}, fmt.Errorf("failed to convert thumb to JPEG: %w", err)
@@ -176,7 +174,6 @@ func (p *PhotoProcessor) downloadImage(ctx context.Context, url string) ([]byte,
 }
 
 // convertToJPEG converts an image to JPEG format with specified size
-// TODO: Migrate to WebP when proper library is configured
 func (p *PhotoProcessor) convertToJPEG(img image.Image, size PhotoSize) ([]byte, error) {
 	// Resize image maintaining aspect ratio
 	resized := resize.Thumbnail(size.Width, size.Height, img, resize.Lanczos3)
