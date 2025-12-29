@@ -193,90 +193,127 @@ export default function PropertyDetailsPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Image Gallery - Zillow Style */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-8">
-          {/* Main Image - Left Side (takes 3 columns) */}
-          <div className="col-span-1 md:col-span-3">
-            <div
-              className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
-              onClick={() => {
-                setCurrentImageIndex(0);
-                setIsLightboxOpen(true);
-              }}
-            >
-              {property.images && property.images.length > 0 ? (
-                <Image
-                  src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
-                  alt={property.title || 'Imóvel'}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  priority
-                />
-              ) : (
-                <Image
-                  src="/placeholder-property.jpg"
-                  alt="Sem imagem"
-                  fill
-                  className="object-cover"
-                />
-              )}
-              {property.featured && (
-                <div className="absolute top-4 left-4 z-10">
-                  <Badge variant="featured">Destaque</Badge>
-                </div>
-              )}
+        {/* Image Gallery - Exact Zillow Style */}
+        <div className="relative h-[400px] md:h-[500px] mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-1 h-full">
+            {/* Main Large Image - Left (8 columns on desktop) */}
+            <div className="col-span-1 md:col-span-8 h-full">
+              <div
+                className="relative w-full h-full rounded-l-lg overflow-hidden cursor-pointer group"
+                onClick={() => {
+                  setCurrentImageIndex(0);
+                  setIsLightboxOpen(true);
+                }}
+              >
+                {property.images && property.images.length > 0 ? (
+                  <Image
+                    src={property.images[0]?.large_url || property.cover_image_url || '/placeholder-property.jpg'}
+                    alt={property.title || 'Imóvel'}
+                    fill
+                    className="object-cover"
+                    priority
+                  />
+                ) : (
+                  <Image
+                    src="/placeholder-property.jpg"
+                    alt="Sem imagem"
+                    fill
+                    className="object-cover"
+                  />
+                )}
+                {property.featured && (
+                  <div className="absolute top-4 left-4 z-10">
+                    <Badge variant="featured">Destaque</Badge>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Thumbnail Grid - Right Side */}
-          {property.images && property.images.length > 1 && (
-            <div className="hidden md:grid grid-rows-2 gap-2 col-span-1">
-              {/* Second Image */}
-              {property.images[1] && (
-                <div
-                  className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
-                  onClick={() => {
-                    setCurrentImageIndex(1);
-                    setIsLightboxOpen(true);
-                  }}
-                >
-                  <Image
-                    src={property.images[1].medium_url}
-                    alt={`${property.title} - Foto 2`}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                </div>
-              )}
+            {/* Small Images Grid - Right (4 columns on desktop, 2x2 grid) */}
+            {property.images && property.images.length > 1 && (
+              <div className="hidden md:grid md:col-span-4 grid-cols-2 grid-rows-2 gap-1 h-full">
+                {/* Image 2 - Top Left */}
+                {property.images[1] && (
+                  <div
+                    className="relative w-full h-full overflow-hidden cursor-pointer"
+                    onClick={() => {
+                      setCurrentImageIndex(1);
+                      setIsLightboxOpen(true);
+                    }}
+                  >
+                    <Image
+                      src={property.images[1].medium_url}
+                      alt={`${property.title} - Foto 2`}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
 
-              {/* Third Image or "See all photos" button */}
-              {property.images[2] && (
-                <div
-                  className="relative w-full aspect-[4/3] rounded-lg overflow-hidden cursor-pointer group bg-gray-100"
-                  onClick={() => {
-                    setCurrentImageIndex(2);
-                    setIsLightboxOpen(true);
-                  }}
-                >
-                  <Image
-                    src={property.images[2].medium_url}
-                    alt={`${property.title} - Foto 3`}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  {property.images.length > 3 && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center hover:bg-black/70 transition-colors z-10">
-                      <div className="text-white text-center">
-                        <Maximize2 className="w-8 h-8 mx-auto mb-2" />
-                        <p className="text-sm font-semibold">Ver todas</p>
-                        <p className="text-xs">{property.images.length} fotos</p>
+                {/* Image 3 - Top Right */}
+                {property.images[2] && (
+                  <div
+                    className="relative w-full h-full rounded-tr-lg overflow-hidden cursor-pointer"
+                    onClick={() => {
+                      setCurrentImageIndex(2);
+                      setIsLightboxOpen(true);
+                    }}
+                  >
+                    <Image
+                      src={property.images[2].medium_url}
+                      alt={`${property.title} - Foto 3`}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Image 4 - Bottom Left */}
+                {property.images[3] && (
+                  <div
+                    className="relative w-full h-full overflow-hidden cursor-pointer"
+                    onClick={() => {
+                      setCurrentImageIndex(3);
+                      setIsLightboxOpen(true);
+                    }}
+                  >
+                    <Image
+                      src={property.images[3].medium_url}
+                      alt={`${property.title} - Foto 4`}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                )}
+
+                {/* Image 5 - Bottom Right with "See all" overlay */}
+                {property.images[4] && (
+                  <div
+                    className="relative w-full h-full rounded-br-lg overflow-hidden cursor-pointer group"
+                    onClick={() => {
+                      setCurrentImageIndex(4);
+                      setIsLightboxOpen(true);
+                    }}
+                  >
+                    <Image
+                      src={property.images[4].medium_url}
+                      alt={`${property.title} - Foto 5`}
+                      fill
+                      className="object-cover"
+                    />
+                    {property.images.length > 5 && (
+                      <div className="absolute inset-0 bg-black/70 flex items-center justify-center group-hover:bg-black/80 transition-colors">
+                        <div className="text-white text-center">
+                          <Maximize2 className="w-6 h-6 mx-auto mb-1" />
+                          <p className="text-sm font-semibold">{property.images.length - 5}+ mais</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
