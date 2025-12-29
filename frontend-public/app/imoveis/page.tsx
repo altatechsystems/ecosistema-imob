@@ -46,21 +46,21 @@ export default function PropertiesPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <Home className="w-8 h-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Imobiliária</span>
+              <Home className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/imoveis" className="text-blue-600 font-semibold">
+            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+              <Link href="/imoveis" className="text-blue-600 font-semibold text-sm lg:text-base">
                 Imóveis
               </Link>
-              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium">
+              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Sobre
               </Link>
-              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium">
+              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Contato
               </Link>
             </nav>
@@ -68,8 +68,8 @@ export default function PropertiesPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
+        <div className="flex flex-col lg:flex-row gap-6 sm:gap-8">
           {/* Sidebar Filters */}
           <aside className="w-full lg:w-80 flex-shrink-0">
             <PropertyFiltersComponent
@@ -83,18 +83,18 @@ export default function PropertiesPage() {
           {/* Main Content */}
           <main className="flex-1">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2">
                   Imóveis Disponíveis
                 </h1>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   {isLoading ? 'Carregando...' : `${properties.length} imóveis encontrados`}
                 </p>
               </div>
 
               {/* View Toggle */}
-              <div className="hidden md:flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <Button
                   variant={viewMode === 'grid' ? 'primary' : 'outline'}
                   size="sm"

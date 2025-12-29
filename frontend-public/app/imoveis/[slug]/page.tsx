@@ -176,15 +176,15 @@ export default function PropertyDetailsPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <Home className="w-8 h-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Imobiliária</span>
+              <Home className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium">
+            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Voltar para Imóveis
               </Link>
             </nav>
@@ -192,9 +192,9 @@ export default function PropertyDetailsPage() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8">
         {/* Image Gallery - Exact Zillow Style */}
-        <div className="relative h-[400px] md:h-[500px] mb-8">
+        <div className="relative h-[300px] sm:h-[400px] md:h-[500px] mb-6 sm:mb-8">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-1 h-full">
             {/* Main Large Image - Left (8 columns on desktop) */}
             <div className="col-span-1 md:col-span-8 h-full">
@@ -330,21 +330,21 @@ export default function PropertyDetailsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* Title and Price */}
             <Card variant="bordered" padding="lg">
-              <div className="flex items-start justify-between mb-4">
-                <div>
+              <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
+                <div className="flex-1">
                   <Badge variant="info" size="md" className="mb-3">
                     {getTransactionTypeLabel(property.transaction_type)}
                   </Badge>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                     {property.title || `${getPropertyTypeLabel(property.property_type)} em ${property.neighborhood}`}
                   </h1>
-                  <div className="flex items-center text-gray-600">
-                    <MapPin className="w-5 h-5 mr-2" />
+                  <div className="flex items-start text-gray-600 text-sm sm:text-base">
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 mr-2 mt-0.5 flex-shrink-0" />
                     <span>
                       {property.street}, {property.number} - {property.neighborhood}, {property.city} - {property.state}
                     </span>
@@ -352,19 +352,19 @@ export default function PropertyDetailsPage() {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="ghost" size="sm" onClick={handleShare}>
-                    <Share2 className="w-5 h-5" />
+                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   </Button>
                   <Button variant="ghost" size="sm">
-                    <Heart className="w-5 h-5" />
+                    <Heart className="w-4 h-4 sm:w-5 sm:h-5" />
                   </Button>
                 </div>
               </div>
 
               <div className="border-t pt-4">
-                <p className="text-sm text-gray-600 mb-1">
+                <p className="text-xs sm:text-sm text-gray-600 mb-1">
                   {property.transaction_type === 'rent' ? 'Aluguel' : 'Venda'}
                 </p>
-                <p className="text-4xl font-bold text-blue-600">
+                <p className="text-2xl sm:text-3xl md:text-4xl font-bold text-blue-600">
                   {formatCurrency(price)}
                 </p>
               </div>
@@ -372,8 +372,8 @@ export default function PropertyDetailsPage() {
 
             {/* Features */}
             <Card variant="bordered" padding="lg">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Características</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Características</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
                 {property.bedrooms && (
                   <div className="flex items-center gap-3">
                     <Bed className="w-6 h-6 text-blue-600" />
@@ -416,8 +416,8 @@ export default function PropertyDetailsPage() {
             {/* Description */}
             {property.description && (
               <Card variant="bordered" padding="lg">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Descrição</h2>
-                <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Descrição</h2>
+                <p className="text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-line">
                   {property.description}
                 </p>
               </Card>
@@ -426,8 +426,8 @@ export default function PropertyDetailsPage() {
             {/* Amenities */}
             {amenities.length > 0 && (
               <Card variant="bordered" padding="lg">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Comodidades</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">Comodidades</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                   {amenities.map((amenity, index) => (
                     <div key={index} className="flex items-center gap-2 text-gray-700">
                       <div className="w-2 h-2 bg-blue-600 rounded-full" />
@@ -440,10 +440,10 @@ export default function PropertyDetailsPage() {
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Quick Contact */}
             <Card variant="elevated" padding="lg">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Entre em Contato</h3>
+              <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Entre em Contato</h3>
               <div className="space-y-3">
                 <Button
                   variant="secondary"
@@ -451,8 +451,9 @@ export default function PropertyDetailsPage() {
                   className="w-full"
                   leftIcon={<MessageCircle className="w-5 h-5" />}
                   onClick={handleWhatsAppClick}
+                  disabled={isCreatingLead}
                 >
-                  WhatsApp
+                  {isCreatingLead ? 'Aguarde...' : 'WhatsApp'}
                 </Button>
               </div>
             </Card>
@@ -467,9 +468,9 @@ export default function PropertyDetailsPage() {
 
         {/* Similar Properties */}
         {similarProperties.length > 0 && (
-          <div className="mt-16">
-            <h2 className="text-3xl font-bold text-gray-900 mb-8">Imóveis Similares</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="mt-12 sm:mt-16">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-6 sm:mb-8">Imóveis Similares</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               {similarProperties.map((similarProperty) => (
                 <PropertyCard key={similarProperty.id} property={similarProperty} variant="grid" />
               ))}

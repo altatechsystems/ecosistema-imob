@@ -45,29 +45,29 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <Home className="w-8 h-8 text-blue-600" />
-              <span className="text-2xl font-bold text-gray-900">Imobiliária</span>
+              <Home className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-6">
-              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium">
+            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Imóveis
               </Link>
-              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium">
+              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Sobre
               </Link>
-              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium">
+              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
                 Contato
               </Link>
-              <Link href="/cadastro-imobiliaria" className="text-gray-700 hover:text-blue-600 font-medium">
+              <Link href="/cadastro-imobiliaria" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base hidden lg:inline">
                 Para Imobiliárias
               </Link>
               <Link href="http://localhost:3002/login" target="_blank">
                 <Button variant="outline" size="sm">
-                  Login Admin
+                  Login
                 </Button>
               </Link>
             </nav>
@@ -77,12 +77,12 @@ export default function HomePage() {
 
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-blue-600 to-blue-800 text-white">
-        <div className="container mx-auto px-4 py-20">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
+        <div className="container mx-auto px-3 sm:px-4 py-12 sm:py-16 md:py-20">
+          <div className="max-w-3xl mx-auto text-center mb-8 sm:mb-12">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4">
               Encontre o Imóvel dos Seus Sonhos
             </h1>
-            <p className="text-xl text-blue-100">
+            <p className="text-base sm:text-lg md:text-xl text-blue-100">
               Milhares de imóveis para venda e aluguel em todo o Brasil
             </p>
           </div>
@@ -100,9 +100,9 @@ export default function HomePage() {
       </section>
 
       {/* Stats Section */}
-      <section className="bg-white py-12 border-b">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+      <section className="bg-white py-8 sm:py-12 border-b">
+        <div className="container mx-auto px-3 sm:px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 text-center">
             <div>
               <div className="flex items-center justify-center mb-2">
                 <Home className="w-10 h-10 text-blue-600" />
@@ -129,19 +129,19 @@ export default function HomePage() {
       </section>
 
       {/* Featured Properties */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-8">
+      <section className="py-8 sm:py-12 md:py-16">
+        <div className="container mx-auto px-3 sm:px-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
                 Imóveis em Destaque
               </h2>
-              <p className="text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600">
                 Conheça nossas melhores oportunidades
               </p>
             </div>
             <Link href="/imoveis">
-              <Button variant="outline" size="md">
+              <Button variant="outline" size="md" className="whitespace-nowrap">
                 Ver Todos
               </Button>
             </Link>
@@ -186,16 +186,16 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="bg-blue-600 text-white py-16">
-        <div className="container mx-auto px-4">
+      <section className="bg-blue-600 text-white py-12 sm:py-16">
+        <div className="container mx-auto px-3 sm:px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
               Precisa de Ajuda para Encontrar seu Imóvel?
             </h2>
-            <p className="text-xl text-blue-100 mb-8">
+            <p className="text-base sm:text-lg md:text-xl text-blue-100 mb-6 sm:mb-8">
               Nossa equipe de especialistas está pronta para ajudá-lo
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
               <Link href="/contato">
                 <Button variant="secondary" size="lg" leftIcon={<PhoneCall className="w-5 h-5" />}>
                   Fale Conosco
@@ -212,15 +212,15 @@ export default function HomePage() {
       </section>
 
       {/* CTA for Real Estate Agencies */}
-      <section className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-20">
-        <div className="container mx-auto px-4">
+      <section className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-12 sm:py-16 md:py-20">
+        <div className="container mx-auto px-3 sm:px-4">
           <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-12 items-center">
               <div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 sm:mb-4">
                   Você é uma Imobiliária?
                 </h2>
-                <p className="text-xl text-gray-300 mb-6">
+                <p className="text-base sm:text-lg md:text-xl text-gray-300 mb-4 sm:mb-6">
                   Junte-se à nossa plataforma e alcance milhares de potenciais compradores
                 </p>
                 <ul className="space-y-3 mb-8">
@@ -311,9 +311,9 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-300 py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+      <footer className="bg-gray-900 text-gray-300 py-8 sm:py-12">
+        <div className="container mx-auto px-3 sm:px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8 mb-6 sm:mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Home className="w-6 h-6 text-blue-400" />
