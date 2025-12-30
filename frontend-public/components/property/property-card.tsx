@@ -19,6 +19,9 @@ import { Bed, Bath, Car, MapPin, Maximize2, MessageCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { LeadChannel } from '@/types/lead';
 
+// Placeholder SVG for properties without images
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TZW0gSW1hZ2VtPC90ZXh0Pjwvc3ZnPg==';
+
 export interface PropertyCardProps {
   property: Property;
   variant?: 'grid' | 'list';
@@ -87,7 +90,7 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
             {/* Image */}
             <div className="relative w-full sm:w-64 md:w-80 h-56 sm:h-64 md:h-auto flex-shrink-0">
               <Image
-                src={property.cover_image_url || '/placeholder-property.jpg'}
+                src={property.cover_image_url || PLACEHOLDER_IMAGE}
                 alt={property.title || `${getPropertyTypeLabel(property.property_type)} em ${property.city}`}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 768px) 256px, 320px"
@@ -170,7 +173,7 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
         {/* Image */}
         <div className="relative w-full h-48 sm:h-56">
           <Image
-            src={property.cover_image_url || '/placeholder-property.jpg'}
+            src={property.cover_image_url || PLACEHOLDER_IMAGE}
             alt={property.title || `${getPropertyTypeLabel(property.property_type)} em ${property.city}`}
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
