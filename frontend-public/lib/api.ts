@@ -157,14 +157,14 @@ class ApiClient {
   // Brokers
   async getBrokerPublicProfile(brokerId: string): Promise<Broker> {
     const response = await this.client.get<{ success: boolean; data: Broker }>(
-      `/api/v1/${this.tenantId}/brokers/${brokerId}/public`
+      `/v1/${this.tenantId}/brokers/${brokerId}/public`
     );
     return response.data.data;
   }
 
   async getBrokerProperties(brokerId: string, limit: number = 20): Promise<Property[]> {
     const response = await this.client.get<{ success: boolean; data: Property[] }>(
-      `/api/v1/${this.tenantId}/brokers/${brokerId}/properties`,
+      `/v1/${this.tenantId}/brokers/${brokerId}/properties`,
       {
         params: { limit }
       }
