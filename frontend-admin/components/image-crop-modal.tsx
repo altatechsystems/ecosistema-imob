@@ -36,11 +36,11 @@ export default function ImageCropModal({
 
       img.onload = () => {
         setImage(img);
-        // Center image initially
+        // Center image initially with less zoom to show more of the original photo
         const initialScale = Math.max(
           CROP_SIZE / img.width,
           CROP_SIZE / img.height
-        ) * 1.2;
+        ) * 0.85; // Reduced from 1.2 to 0.85 to show more of the image
         setScale(initialScale);
         setPosition({ x: 0, y: 0 });
       };
@@ -153,7 +153,7 @@ export default function ImageCropModal({
   };
 
   const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.1, 0.5));
+    setScale((prev) => Math.max(prev - 0.1, 0.3));
   };
 
   const handleRotate = () => {
@@ -261,7 +261,7 @@ export default function ImageCropModal({
           <div className="flex-1 max-w-xs">
             <input
               type="range"
-              min="0.5"
+              min="0.3"
               max="3"
               step="0.1"
               value={scale}
