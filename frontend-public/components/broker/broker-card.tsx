@@ -177,18 +177,15 @@ export function BrokerCard({
         </div>
       </div>
 
-      {/* Bio */}
-      {broker.bio && (
-        <div className="mb-4">
-          <p className="text-sm text-gray-700 line-clamp-3">{broker.bio}</p>
-          <Link
-            href={`/corretores/${broker.id}`}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-1 inline-block"
-          >
-            Ver perfil completo →
-          </Link>
-        </div>
-      )}
+      {/* Profile Link */}
+      <div className="mb-4">
+        <Link
+          href={`/corretores/${broker.id}`}
+          className="text-sm text-blue-600 hover:text-blue-700 font-medium inline-block"
+        >
+          Ver perfil completo →
+        </Link>
+      </div>
 
       {/* Specialties */}
       {broker.specialties && (
