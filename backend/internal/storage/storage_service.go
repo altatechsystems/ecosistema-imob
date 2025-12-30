@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/url"
 	"strings"
 	"time"
 
@@ -329,16 +330,21 @@ func (s *StorageService) ListPropertyImages(
 
 // generateSignedURL generates a signed URL for accessing an object
 func (s *StorageService) generateSignedURL(ctx context.Context, objectPath string) (string, error) {
-	// For now, return a public URL
-	// In production, you would use storage.SignedURL with proper credentials
-	// This requires setting up a service account with signing permissions
+	// For Firebase Storage, use the Firebase Storage download URL format
+	// This works if the bucket has public access or Firebase Storage rules allow it
 
-	// Public URL format for Firebase Storage
-	url := fmt.Sprintf("https://storage.googleapis.com/%s/%s", s.bucketName, objectPath)
+	// URL encode the object path for use in URL
+	encodedPath := url.PathEscape(objectPath)
 
-	return url, nil
+	// Firebase Storage public URL format
+	// Format: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{encodedPath}?alt=media
+	downloadURL := fmt.Sprintf("https://firebasestorage.googleapis.com/v0/b/%s/o/%s?alt=media",
+		s.bucketName,
+		encodedPath)
 
-	// TODO: Implement proper signed URLs in production
+	return downloadURL, nil
+
+	// TODO: Implement proper signed URLs in production for private buckets
 	// This requires:
 	// 1. Service account with Storage Object Admin role
 	// 2. storage.SignedURL() with GoogleAccessID and PrivateKey
