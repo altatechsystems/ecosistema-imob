@@ -9,8 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   User,
-  Mail,
-  Phone,
   Award,
   Star,
   Building2,
@@ -30,17 +28,14 @@ export function BrokerCard({
   showContact = true,
   onContactClick
 }: BrokerCardProps) {
-  const handlePhoneClick = () => {
+  const handleWhatsAppClick = () => {
     if (onContactClick) {
       onContactClick();
     } else if (broker.phone) {
-      window.open(`tel:${broker.phone}`, '_self');
-    }
-  };
-
-  const handleEmailClick = () => {
-    if (broker.email) {
-      window.open(`mailto:${broker.email}`, '_self');
+      // Format phone number for WhatsApp (remove formatting, keep only numbers)
+      const phoneNumber = broker.phone.replace(/\D/g, '');
+      const message = encodeURIComponent('Olá, vi seu perfil no site e gostaria de mais informações.');
+      window.open(`https://wa.me/55${phoneNumber}?text=${message}`, '_blank');
     }
   };
 
@@ -88,25 +83,16 @@ export function BrokerCard({
               </div>
             )}
 
-            {showContact && (
-              <div className="flex gap-2 mt-3">
-                {broker.phone && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handlePhoneClick}
-                    leftIcon={<Phone className="w-4 h-4" />}
-                  >
-                    Ligar
-                  </Button>
-                )}
+            {showContact && broker.phone && (
+              <div className="mt-3">
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
-                  onClick={handleEmailClick}
-                  leftIcon={<Mail className="w-4 h-4" />}
+                  onClick={handleWhatsAppClick}
+                  leftIcon={<MessageCircle className="w-4 h-4" />}
+                  className="w-full"
                 >
-                  Email
+                  WhatsApp
                 </Button>
               </div>
             )}
@@ -224,28 +210,17 @@ export function BrokerCard({
         </div>
       )}
 
-      {/* Contact Buttons */}
-      {showContact && (
-        <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
-          {broker.phone && (
-            <Button
-              variant="primary"
-              size="lg"
-              className="flex-1"
-              onClick={handlePhoneClick}
-              leftIcon={<Phone className="w-5 h-5" />}
-            >
-              {broker.phone}
-            </Button>
-          )}
+      {/* Contact Button */}
+      {showContact && broker.phone && (
+        <div className="pt-4 border-t">
           <Button
-            variant="secondary"
+            variant="primary"
             size="lg"
-            className="flex-1"
-            onClick={handleEmailClick}
-            leftIcon={<Mail className="w-5 h-5" />}
+            className="w-full"
+            onClick={handleWhatsAppClick}
+            leftIcon={<MessageCircle className="w-5 h-5" />}
           >
-            Enviar Email
+            Enviar WhatsApp
           </Button>
         </div>
       )}
