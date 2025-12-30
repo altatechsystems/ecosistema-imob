@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/altatech/ecosistema-imob/backend/internal/models"
@@ -201,19 +202,30 @@ func (s *BrokerService) UpdateBroker(ctx context.Context, tenantID, id string, u
 		return fmt.Errorf("broker ID is required")
 	}
 
+	// Debug: log updates
+	fmt.Printf("DEBUG UpdateBroker - tenantID: %s, id: %s, updates: %+v\n", tenantID, id, updates)
+
 	// Validate broker exists
 	existing, err := s.brokerRepo.Get(ctx, tenantID, id)
 	if err != nil {
+		fmt.Printf("DEBUG UpdateBroker - failed to get existing broker: %v\n", err)
 		return fmt.Errorf("broker not found: %w", err)
 	}
+	fmt.Printf("DEBUG UpdateBroker - existing broker: name=%s, email=%s\n", existing.Name, existing.Email)
 
-	// Validate CRECI if being updated (skip validation if "PENDENTE")
-	if creci, ok := updates["creci"].(string); ok && creci != "" {
-		if creci != "PENDENTE" {
-			if err := s.ValidateCRECI(creci); err != nil {
-				return err
+	// Validate CRECI if being updated (skip validation if "PENDENTE" or empty)
+	if creci, ok := updates["creci"].(string); ok {
+		// Only validate if CRECI is not empty and not "PENDENTE" and contains hyphen (formatted)
+		if creci != "" && creci != "PENDENTE" {
+			// Only validate if it looks like a formatted CRECI (contains hyphen or slash)
+			if len(creci) > 5 && (creci[len(creci)-3] == '/' || strings.Contains(creci, "-")) {
+				if err := s.ValidateCRECI(creci); err != nil {
+					return err
+				}
+				updates["creci"] = utils.NormalizeCRECI(creci)
 			}
-			updates["creci"] = utils.NormalizeCRECI(creci)
+			// If it's just numbers, allow it but don't normalize
+			// User can update to partial CRECI number and complete later
 		}
 	}
 

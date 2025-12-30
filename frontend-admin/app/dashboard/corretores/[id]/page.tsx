@@ -90,6 +90,16 @@ export default function BrokerDetailPage() {
 
       const token = await user.getIdToken(true);
 
+      // Extract only editable fields for update
+      const {
+        id,
+        tenant_id,
+        firebase_uid,
+        created_at,
+        updated_at,
+        ...editableFields
+      } = broker;
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/brokers/${brokerId}`,
         {
@@ -98,7 +108,7 @@ export default function BrokerDetailPage() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(broker),
+          body: JSON.stringify(editableFields),
         }
       );
 

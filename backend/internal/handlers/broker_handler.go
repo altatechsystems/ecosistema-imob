@@ -148,6 +148,8 @@ func (h *BrokerHandler) UpdateBroker(c *gin.Context) {
 			})
 			return
 		}
+		// Log detailed error
+		c.Error(err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   err.Error(),
