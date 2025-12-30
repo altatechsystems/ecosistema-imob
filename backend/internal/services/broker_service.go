@@ -18,6 +18,7 @@ type BrokerService struct {
 	activityLogRepo        *repositories.ActivityLogRepository
 	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository
 	propertyRepo           *repositories.PropertyRepository
+	listingRepo            *repositories.ListingRepository
 }
 
 // NewBrokerService creates a new broker service
@@ -27,6 +28,7 @@ func NewBrokerService(
 	activityLogRepo *repositories.ActivityLogRepository,
 	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository,
 	propertyRepo *repositories.PropertyRepository,
+	listingRepo *repositories.ListingRepository,
 ) *BrokerService {
 	return &BrokerService{
 		brokerRepo:             brokerRepo,
@@ -34,6 +36,7 @@ func NewBrokerService(
 		activityLogRepo:        activityLogRepo,
 		propertyBrokerRoleRepo: propertyBrokerRoleRepo,
 		propertyRepo:           propertyRepo,
+		listingRepo:            listingRepo,
 	}
 }
 
@@ -572,6 +575,20 @@ func (s *BrokerService) GetBrokerProperties(ctx context.Context, tenantID, broke
 	properties, err := s.propertyRepo.ListByCaptador(ctx, tenantID, brokerID, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get broker properties: %w", err)
+	}
+
+	// Populate cover image URL from canonical listing for each property
+	for _, property := range properties {
+		if property.CanonicalListingID != "" {
+			// Get listing to fetch first photo
+			listing, err := s.listingRepo.Get(ctx, tenantID, property.CanonicalListingID)
+			if err != nil {
+				continue
+			}
+			if listing != nil && len(listing.Photos) > 0 {
+				property.CoverImageURL = listing.Photos[0].ThumbURL
+			}
+		}
 	}
 
 	return properties, nil

@@ -107,6 +107,9 @@ func SetupTestContext(t *testing.T) *TestContext {
 			repos.BrokerRepo,
 			repos.TenantRepo,
 			repos.ActivityLogRepo,
+			repos.PropertyBrokerRoleRepo,
+			repos.PropertyRepo,
+			repos.ListingRepo,
 		),
 		OwnerService: services.NewOwnerService(
 			repos.OwnerRepo,
