@@ -207,20 +207,26 @@ func (s *BrokerService) UpdateBroker(ctx context.Context, tenantID, id string, u
 		return fmt.Errorf("broker not found: %w", err)
 	}
 
-	// Validate CRECI if being updated
+	// Validate CRECI if being updated (skip validation if "PENDENTE")
 	if creci, ok := updates["creci"].(string); ok && creci != "" {
-		if err := s.ValidateCRECI(creci); err != nil {
-			return err
+		if creci != "PENDENTE" {
+			if err := s.ValidateCRECI(creci); err != nil {
+				return err
+			}
+			updates["creci"] = utils.NormalizeCRECI(creci)
 		}
-		updates["creci"] = utils.NormalizeCRECI(creci)
 	}
 
-	// Validate email if being updated
+	// Validate email if being updated (skip validation for @pendente.com.br temporary emails)
 	if email, ok := updates["email"].(string); ok && email != "" {
-		if err := utils.ValidateEmail(email); err != nil {
-			return fmt.Errorf("invalid email: %w", err)
-		}
 		normalizedEmail := utils.NormalizeEmail(email)
+
+		// Skip strict validation for temporary placeholder emails
+		if !isPendingEmail(normalizedEmail) {
+			if err := utils.ValidateEmail(email); err != nil {
+				return fmt.Errorf("invalid email: %w", err)
+			}
+		}
 
 		// Check email uniqueness if changed
 		if normalizedEmail != existing.Email {
@@ -485,4 +491,9 @@ func (s *BrokerService) logActivity(ctx context.Context, tenantID, eventType str
 	}
 
 	return s.activityLogRepo.Create(ctx, log)
+}
+
+// isPendingEmail checks if an email is a temporary placeholder email
+func isPendingEmail(email string) bool {
+	return len(email) > 16 && email[len(email)-16:] == "@pendente.com.br"
 }
