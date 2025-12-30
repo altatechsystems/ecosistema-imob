@@ -102,10 +102,6 @@ func main() {
 
 // initializeFirebase initializes Firebase Admin SDK
 func initializeFirebase(ctx context.Context, cfg *config.Config) (*firebase.App, *auth.Client, *firestore.Client, error) {
-	// Set environment variable for Firestore database
-	// This tells Firestore SDK to use the named database instead of (default)
-	os.Setenv("FIRESTORE_DATABASE", "imob-dev")
-
 	// Initialize Firebase app
 	opt := option.WithCredentialsFile(cfg.FirebaseCredentials)
 	app, err := firebase.NewApp(ctx, &firebase.Config{
@@ -121,12 +117,13 @@ func initializeFirebase(ctx context.Context, cfg *config.Config) (*firebase.App,
 		return nil, nil, nil, fmt.Errorf("failed to initialize Firebase Auth: %w", err)
 	}
 
-	// Initialize Firestore client directly with named database
-	// Use firestore.NewClient with DatabaseID to connect to non-default database
+	// Initialize Firestore client with named database "imob-dev" (where the data is stored)
+	log.Println("Connecting to Firestore database: imob-dev")
 	firestoreClient, err := firestore.NewClientWithDatabase(ctx, cfg.FirebaseProjectID, "imob-dev", opt)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to initialize Firestore: %w", err)
 	}
+	log.Println("✅ Connected to Firestore database: imob-dev")
 
 	return app, authClient, firestoreClient, nil
 }
