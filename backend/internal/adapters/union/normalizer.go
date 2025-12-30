@@ -106,6 +106,14 @@ func NormalizeProperty(xml *XMLImovel, xls *XLSRecord, tenantID string) Property
 		dataCompleteness = "complete"
 	}
 
+	// Extract captador name from XLS or XML
+	captadorName := ""
+	if xls != nil && xls.Captador != "" {
+		captadorName = xls.Captador
+	} else if xml.Captador != "" {
+		captadorName = xml.Captador
+	}
+
 	// Create property
 	property := models.Property{
 		ID:       propertyID,
@@ -118,6 +126,10 @@ func NormalizeProperty(xml *XMLImovel, xls *XLSRecord, tenantID string) Property
 
 		// Owner (will be set by ImportService)
 		OwnerID: "", // populated by ImportService.createOwner
+
+		// Captador (corretor que captou o imóvel)
+		CaptadorName: captadorName,
+		CaptadorID:   "", // will be populated when broker is fully registered
 
 		// Type and location
 		PropertyType: propertyType,

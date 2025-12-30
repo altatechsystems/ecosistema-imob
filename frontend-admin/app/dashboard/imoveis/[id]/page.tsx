@@ -57,6 +57,8 @@ interface Property {
   updated_at?: string;
   canonical_listing_id?: string;
   owner_id?: string;
+  captador_name?: string; // Nome do corretor captador
+  captador_id?: string;   // ID do broker quando cadastrado
 }
 
 interface Listing {
@@ -669,6 +671,44 @@ export default function PropertyDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Captador Card */}
+          {property?.captador_name && (
+            <div className="bg-white rounded-lg shadow-sm p-4 md:p-6">
+              <h3 className="text-base md:text-lg font-bold text-gray-900 mb-4">Captador</h3>
+
+              <div className="space-y-3 text-xs md:text-sm">
+                <div>
+                  <label className="block text-gray-600 mb-1">Nome do Corretor</label>
+                  <p className="font-medium text-gray-900">{property.captador_name}</p>
+                </div>
+
+                {property.captador_id ? (
+                  <div className="pt-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                      ✓ Cadastro completo
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/dashboard/corretores/${property.captador_id}`)}
+                      className="ml-3 text-xs md:text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                      Ver detalhes do corretor →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="pt-2">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      ⚠ Cadastro pendente
+                    </span>
+                    <p className="text-xs text-gray-600 mt-2">
+                      O captador precisa completar o cadastro com CPF e CRECI
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Actions Card */}
           <div className="bg-white rounded-lg shadow-sm p-4 md:p-6">

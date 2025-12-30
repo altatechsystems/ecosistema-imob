@@ -18,6 +18,10 @@ type Property struct {
 	// Proprietário
 	OwnerID string `firestore:"owner_id" json:"owner_id"` // ref Owner
 
+	// Captador (Corretor que captou o imóvel)
+	CaptadorName string `firestore:"captador_name,omitempty" json:"captador_name,omitempty"` // Nome do captador (temporário até associar ao Broker)
+	CaptadorID   string `firestore:"captador_id,omitempty" json:"captador_id,omitempty"`     // ref Broker (quando cadastrado completamente)
+
 	// Tipo e localização
 	PropertyType PropertyType `firestore:"property_type" json:"property_type"` // apartment, house, land, commercial
 	Street       string       `firestore:"street,omitempty" json:"street,omitempty"`

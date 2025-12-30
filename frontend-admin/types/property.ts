@@ -42,6 +42,8 @@ export interface Property {
   id: string;
   tenant_id: string;
   owner_id: string;
+  captador_name?: string; // Nome do corretor captador
+  captador_id?: string;   // ID do broker quando cadastrado
   transaction_type: TransactionType;
   property_type: PropertyType;
   status: PropertyStatus;
