@@ -224,17 +224,6 @@ export function BrokerCard({
           </Button>
         </div>
       )}
-
-      {/* View Profile Link */}
-      <Link href={`/corretores/${broker.id}`}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full mt-2"
-        >
-          Ver perfil completo do corretor
-        </Button>
-      </Link>
     </Card>
   );
 }
