@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Save, X, User, Mail, Phone, FileText, Award, Globe, MessageCircle, Camera, Trash2 } from 'lucide-react';
 import { Broker } from '@/types/broker';
+import ImageCropModal from '@/components/image-crop-modal';
 
 export default function BrokerDetailPage() {
   const params = useParams();
@@ -16,6 +17,8 @@ export default function BrokerDetailPage() {
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -149,6 +152,12 @@ export default function BrokerDetailPage() {
       return;
     }
 
+    // Open crop modal
+    setSelectedImageFile(file);
+    setShowCropModal(true);
+  };
+
+  const handleCropComplete = async (croppedFile: File) => {
     try {
       setUploadingPhoto(true);
       setError('');
@@ -170,7 +179,7 @@ export default function BrokerDetailPage() {
 
       // Create form data
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', croppedFile);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/brokers/${brokerId}/photo`,
@@ -687,6 +696,22 @@ export default function BrokerDetailPage() {
         <div className="fixed bottom-4 right-4 bg-red-50 border border-red-200 rounded-lg p-4 shadow-lg">
           <p className="text-red-600">{error}</p>
         </div>
+      )}
+
+      {/* Image Crop Modal */}
+      {selectedImageFile && (
+        <ImageCropModal
+          isOpen={showCropModal}
+          imageFile={selectedImageFile}
+          onClose={() => {
+            setShowCropModal(false);
+            setSelectedImageFile(null);
+            if (fileInputRef.current) {
+              fileInputRef.current.value = '';
+            }
+          }}
+          onCropComplete={handleCropComplete}
+        />
       )}
     </div>
   );
