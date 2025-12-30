@@ -13,9 +13,10 @@ import (
 
 // BrokerService handles business logic for broker management
 type BrokerService struct {
-	brokerRepo      *repositories.BrokerRepository
-	tenantRepo      *repositories.TenantRepository
-	activityLogRepo *repositories.ActivityLogRepository
+	brokerRepo             *repositories.BrokerRepository
+	tenantRepo             *repositories.TenantRepository
+	activityLogRepo        *repositories.ActivityLogRepository
+	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository
 }
 
 // NewBrokerService creates a new broker service
@@ -23,11 +24,13 @@ func NewBrokerService(
 	brokerRepo *repositories.BrokerRepository,
 	tenantRepo *repositories.TenantRepository,
 	activityLogRepo *repositories.ActivityLogRepository,
+	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository,
 ) *BrokerService {
 	return &BrokerService{
-		brokerRepo:      brokerRepo,
-		tenantRepo:      tenantRepo,
-		activityLogRepo: activityLogRepo,
+		brokerRepo:             brokerRepo,
+		tenantRepo:             tenantRepo,
+		activityLogRepo:        activityLogRepo,
+		propertyBrokerRoleRepo: propertyBrokerRoleRepo,
 	}
 }
 
@@ -350,6 +353,12 @@ func (s *BrokerService) ListBrokers(ctx context.Context, tenantID string, opts r
 		return nil, fmt.Errorf("failed to list brokers: %w", err)
 	}
 
+	// Enrich brokers with statistics
+	if err := s.enrichBrokersWithStats(ctx, brokers); err != nil {
+		// Log error but don't fail - return brokers without stats
+		fmt.Printf("Warning: failed to enrich brokers with stats: %v\n", err)
+	}
+
 	return brokers, nil
 }
 
@@ -508,4 +517,41 @@ func (s *BrokerService) logActivity(ctx context.Context, tenantID, eventType str
 // isPendingEmail checks if an email is a temporary placeholder email
 func isPendingEmail(email string) bool {
 	return len(email) > 16 && email[len(email)-16:] == "@pendente.com.br"
+}
+
+// enrichBrokerWithStats enriches a single broker with statistics
+func (s *BrokerService) enrichBrokerWithStats(ctx context.Context, broker *models.Broker) error {
+	if broker == nil {
+		return nil
+	}
+
+	// Count properties where broker has any role
+	roles, err := s.propertyBrokerRoleRepo.ListByBroker(ctx, broker.TenantID, broker.ID, repositories.PaginationOptions{
+		Limit: 1000, // Get all roles for counting
+	})
+	if err != nil {
+		// Log error but don't fail - just return broker without stats
+		fmt.Printf("Warning: failed to get property roles for broker %s: %v\n", broker.ID, err)
+		return nil
+	}
+
+	// Count unique properties
+	propertyMap := make(map[string]bool)
+	for _, role := range roles {
+		propertyMap[role.PropertyID] = true
+	}
+
+	broker.TotalListings = len(propertyMap)
+	return nil
+}
+
+// enrichBrokersWithStats enriches multiple brokers with statistics
+func (s *BrokerService) enrichBrokersWithStats(ctx context.Context, brokers []*models.Broker) error {
+	for _, broker := range brokers {
+		if err := s.enrichBrokerWithStats(ctx, broker); err != nil {
+			// Continue enriching other brokers even if one fails
+			continue
+		}
+	}
+	return nil
 }

@@ -211,6 +211,7 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 			repos.BrokerRepo,
 			repos.TenantRepo,
 			repos.ActivityLogRepo,
+			repos.PropertyBrokerRoleRepo,
 		),
 		OwnerService: services.NewOwnerService(
 			repos.OwnerRepo,
