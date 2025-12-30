@@ -474,3 +474,111 @@ func (h *BrokerHandler) DeletePhoto(c *gin.Context) {
 	})
 }
 
+// GetBrokerPublicProfile retrieves a broker's public profile
+// @Summary Get broker public profile
+// @Description Get broker's public profile (sanitized data for public viewing)
+// @Tags brokers
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param id path string true "Broker ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/{tenant_id}/brokers/{id}/public [get]
+func (h *BrokerHandler) GetBrokerPublicProfile(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	id := c.Param("id")
+
+	broker, err := h.brokerService.GetBroker(c.Request.Context(), tenantID, id)
+	if err != nil {
+		if err == repositories.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "broker not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Convert to public broker (sanitized data)
+	publicBroker := &models.BrokerPublic{
+		ID:            broker.ID,
+		Name:          broker.Name,
+		Email:         broker.Email,
+		Phone:         broker.Phone,
+		CRECI:         broker.CRECI,
+		PhotoURL:      broker.PhotoURL,
+		Bio:           broker.Bio,
+		Specialties:   broker.Specialties,
+		Languages:     broker.Languages,
+		Experience:    broker.Experience,
+		Company:       broker.Company,
+		Website:       broker.Website,
+		TotalSales:    broker.TotalSales,
+		TotalListings: broker.TotalListings,
+		AveragePrice:  broker.AveragePrice,
+		Rating:        broker.Rating,
+		ReviewCount:   broker.ReviewCount,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    publicBroker,
+	})
+}
+
+// GetBrokerProperties retrieves properties associated with a broker
+// @Summary Get broker properties
+// @Description Get list of properties where the broker is the captador
+// @Tags brokers
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param id path string true "Broker ID"
+// @Param limit query int false "Limit" default(20)
+// @Success 200 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/{tenant_id}/brokers/{id}/properties [get]
+func (h *BrokerHandler) GetBrokerProperties(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	id := c.Param("id")
+
+	// Verify broker exists
+	_, err := h.brokerService.GetBroker(c.Request.Context(), tenantID, id)
+	if err != nil {
+		if err == repositories.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "broker not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Get properties for this broker
+	properties, err := h.brokerService.GetBrokerProperties(c.Request.Context(), tenantID, id, parsePaginationOptions(c))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    properties,
+		"count":   len(properties),
+	})
+}
+

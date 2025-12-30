@@ -1,5 +1,7 @@
 // Property Types - Matching backend models
 
+import { Broker } from './broker';
+
 export enum TransactionType {
   SALE = 'sale',
   RENT = 'rent',
@@ -98,6 +100,11 @@ export interface Property {
   // Images
   images?: PropertyImage[];
   cover_image_url?: string;
+
+  // Broker information (captador/corretor responsável)
+  captador_id?: string;
+  captador_name?: string;
+  captador?: Broker; // Populated broker data
 
   // Timestamps
   created_at?: Date | string;

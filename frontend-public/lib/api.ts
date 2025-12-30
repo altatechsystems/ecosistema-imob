@@ -6,6 +6,7 @@ import {
   PropertyResponse,
   PaginationOptions,
 } from '@/types/property';
+import { Broker } from '@/types/broker';
 import { CreateLeadRequest, CreateLeadResponse } from '@/types/lead';
 
 class ApiClient {
@@ -151,6 +152,24 @@ class ApiClient {
 
     // Filter out the current property
     return result.data.filter(p => p.id !== propertyId).slice(0, limit);
+  }
+
+  // Brokers
+  async getBrokerPublicProfile(brokerId: string): Promise<Broker> {
+    const response = await this.client.get<{ success: boolean; data: Broker }>(
+      `/api/v1/${this.tenantId}/brokers/${brokerId}/public`
+    );
+    return response.data.data;
+  }
+
+  async getBrokerProperties(brokerId: string, limit: number = 20): Promise<Property[]> {
+    const response = await this.client.get<{ success: boolean; data: Property[] }>(
+      `/api/v1/${this.tenantId}/brokers/${brokerId}/properties`,
+      {
+        params: { limit }
+      }
+    );
+    return response.data.data;
   }
 }
 

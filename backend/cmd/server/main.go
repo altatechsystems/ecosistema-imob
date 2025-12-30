@@ -212,6 +212,7 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 			repos.TenantRepo,
 			repos.ActivityLogRepo,
 			repos.PropertyBrokerRoleRepo,
+			repos.PropertyRepo,
 		),
 		OwnerService: services.NewOwnerService(
 			repos.OwnerRepo,
@@ -222,6 +223,7 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 			repos.PropertyRepo,
 			repos.ListingRepo,
 			repos.OwnerRepo,
+			repos.BrokerRepo,
 			repos.TenantRepo,
 			repos.ActivityLogRepo,
 		),
@@ -350,6 +352,10 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 		public.GET("/properties", handlers.PropertyHandler.ListProperties)
 		public.GET("/properties/:id", handlers.PropertyHandler.GetProperty)
 		public.GET("/properties/slug/:slug", handlers.PropertyHandler.GetPropertyBySlug)
+
+		// Public broker endpoints
+		public.GET("/brokers/:id/public", handlers.BrokerHandler.GetBrokerPublicProfile)
+		public.GET("/brokers/:id/properties", handlers.BrokerHandler.GetBrokerProperties)
 
 		// Public lead creation (extra strict - prevent spam)
 		public.POST("/leads", handlers.LeadHandler.CreateLead)

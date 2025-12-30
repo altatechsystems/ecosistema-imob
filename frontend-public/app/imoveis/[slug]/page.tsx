@@ -8,6 +8,7 @@ import { useParams } from 'next/navigation';
 import { Property } from '@/types/property';
 import { PropertyCard } from '@/components/property/property-card';
 import { ContactForm } from '@/components/forms/contact-form';
+import { BrokerCard } from '@/components/broker/broker-card';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -455,6 +456,15 @@ export default function PropertyDetailsPage() {
 
           {/* Sidebar */}
           <div className="space-y-4 sm:space-y-6">
+            {/* Broker Card */}
+            {property.captador && (
+              <BrokerCard
+                broker={property.captador}
+                variant="full"
+                showContact={true}
+              />
+            )}
+
             {/* Quick Contact */}
             <Card variant="elevated" padding="lg">
               <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Entre em Contato</h3>

@@ -102,3 +102,29 @@ func (b Broker) MarshalJSON() ([]byte, error) {
 		UpdatedAt: b.GetUpdatedAt(),
 	})
 }
+
+// BrokerPublic represents a sanitized broker profile for public display
+// This excludes sensitive information like Firebase UID and document numbers
+type BrokerPublic struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Phone    string `json:"phone,omitempty"`
+	CRECI    string `json:"creci"`
+
+	// Public Profile
+	PhotoURL    string `json:"photo_url,omitempty"`
+	Bio         string `json:"bio,omitempty"`
+	Specialties string `json:"specialties,omitempty"`
+	Languages   string `json:"languages,omitempty"`
+	Experience  int    `json:"experience,omitempty"`
+	Company     string `json:"company,omitempty"`
+	Website     string `json:"website,omitempty"`
+
+	// Public Statistics
+	TotalSales    int     `json:"total_sales,omitempty"`
+	TotalListings int     `json:"total_listings,omitempty"`
+	AveragePrice  float64 `json:"average_price,omitempty"`
+	Rating        float64 `json:"rating,omitempty"`
+	ReviewCount   int     `json:"review_count,omitempty"`
+}

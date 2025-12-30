@@ -18,6 +18,7 @@ type PropertyService struct {
 	propertyRepo    *repositories.PropertyRepository
 	listingRepo     *repositories.ListingRepository
 	ownerRepo       *repositories.OwnerRepository
+	brokerRepo      *repositories.BrokerRepository
 	tenantRepo      *repositories.TenantRepository
 	activityLogRepo *repositories.ActivityLogRepository
 }
@@ -27,6 +28,7 @@ func NewPropertyService(
 	propertyRepo *repositories.PropertyRepository,
 	listingRepo *repositories.ListingRepository,
 	ownerRepo *repositories.OwnerRepository,
+	brokerRepo *repositories.BrokerRepository,
 	tenantRepo *repositories.TenantRepository,
 	activityLogRepo *repositories.ActivityLogRepository,
 ) *PropertyService {
@@ -34,6 +36,7 @@ func NewPropertyService(
 		propertyRepo:    propertyRepo,
 		listingRepo:     listingRepo,
 		ownerRepo:       ownerRepo,
+		brokerRepo:      brokerRepo,
 		tenantRepo:      tenantRepo,
 		activityLogRepo: activityLogRepo,
 	}
@@ -168,6 +171,9 @@ func (s *PropertyService) GetPropertyBySlug(ctx context.Context, tenantID, slug 
 	// Populate photos from canonical listing
 	s.populatePropertyPhotos(ctx, tenantID, property)
 
+	// Populate broker data
+	s.populatePropertyBroker(ctx, tenantID, property)
+
 	return property, nil
 }
 
@@ -200,6 +206,40 @@ func (s *PropertyService) populatePropertyPhotos(ctx context.Context, tenantID s
 
 	// Populate images array for detail page (sorted photos)
 	property.Images = photos
+}
+
+// populatePropertyBroker populates broker data (captador) for public display
+func (s *PropertyService) populatePropertyBroker(ctx context.Context, tenantID string, property *models.Property) {
+	if property == nil || property.CaptadorID == "" {
+		return
+	}
+
+	// Get broker data
+	broker, err := s.brokerRepo.Get(ctx, tenantID, property.CaptadorID)
+	if err != nil || broker == nil {
+		return
+	}
+
+	// Create a sanitized broker object for public display (omit sensitive data)
+	property.Captador = &models.BrokerPublic{
+		ID:           broker.ID,
+		Name:         broker.Name,
+		Email:        broker.Email,
+		Phone:        broker.Phone,
+		CRECI:        broker.CRECI,
+		PhotoURL:     broker.PhotoURL,
+		Bio:          broker.Bio,
+		Specialties:  broker.Specialties,
+		Languages:    broker.Languages,
+		Experience:   broker.Experience,
+		Company:      broker.Company,
+		Website:      broker.Website,
+		TotalSales:   broker.TotalSales,
+		TotalListings: broker.TotalListings,
+		AveragePrice: broker.AveragePrice,
+		Rating:       broker.Rating,
+		ReviewCount:  broker.ReviewCount,
+	}
 }
 
 // UpdateProperty updates a property with validation

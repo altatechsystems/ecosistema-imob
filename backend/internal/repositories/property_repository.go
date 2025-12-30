@@ -308,6 +308,54 @@ func (r *PropertyRepository) ListByOwner(ctx context.Context, tenantID, ownerID 
 	return r.List(ctx, tenantID, filters, opts)
 }
 
+// ListByCaptador retrieves all properties for a captador (broker)
+func (r *PropertyRepository) ListByCaptador(ctx context.Context, tenantID, captadorID string, opts PaginationOptions) ([]*models.Property, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("%w: tenant_id is required", ErrInvalidInput)
+	}
+	if captadorID == "" {
+		return nil, fmt.Errorf("%w: captador_id is required", ErrInvalidInput)
+	}
+
+	if opts.Limit == 0 {
+		opts = DefaultPaginationOptions()
+	}
+
+	// Query properties where captador_id matches
+	query := r.Client().Collection("properties").
+		Where("tenant_id", "==", tenantID).
+		Where("captador_id", "==", captadorID)
+
+	// Apply pagination limit
+	if opts.Limit > 0 {
+		query = query.Limit(opts.Limit)
+	}
+
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	properties := make([]*models.Property, 0)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate properties: %w", err)
+		}
+
+		var property models.Property
+		if err := doc.DataTo(&property); err != nil {
+			return nil, fmt.Errorf("failed to decode property: %w", err)
+		}
+
+		property.ID = doc.Ref.ID
+		properties = append(properties, &property)
+	}
+
+	return properties, nil
+}
+
 // ListByStatus retrieves properties by status
 func (r *PropertyRepository) ListByStatus(ctx context.Context, tenantID string, status models.PropertyStatus, opts PaginationOptions) ([]*models.Property, error) {
 	if tenantID == "" {

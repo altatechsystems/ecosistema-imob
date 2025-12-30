@@ -17,6 +17,7 @@ type BrokerService struct {
 	tenantRepo             *repositories.TenantRepository
 	activityLogRepo        *repositories.ActivityLogRepository
 	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository
+	propertyRepo           *repositories.PropertyRepository
 }
 
 // NewBrokerService creates a new broker service
@@ -25,12 +26,14 @@ func NewBrokerService(
 	tenantRepo *repositories.TenantRepository,
 	activityLogRepo *repositories.ActivityLogRepository,
 	propertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository,
+	propertyRepo *repositories.PropertyRepository,
 ) *BrokerService {
 	return &BrokerService{
 		brokerRepo:             brokerRepo,
 		tenantRepo:             tenantRepo,
 		activityLogRepo:        activityLogRepo,
 		propertyBrokerRoleRepo: propertyBrokerRoleRepo,
+		propertyRepo:           propertyRepo,
 	}
 }
 
@@ -554,4 +557,22 @@ func (s *BrokerService) enrichBrokersWithStats(ctx context.Context, brokers []*m
 		}
 	}
 	return nil
+}
+
+// GetBrokerProperties retrieves all properties where the broker is the captador
+func (s *BrokerService) GetBrokerProperties(ctx context.Context, tenantID, brokerID string, opts repositories.PaginationOptions) ([]*models.Property, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant_id is required")
+	}
+	if brokerID == "" {
+		return nil, fmt.Errorf("broker_id is required")
+	}
+
+	// Get properties where this broker is the captador
+	properties, err := s.propertyRepo.ListByCaptador(ctx, tenantID, brokerID, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get broker properties: %w", err)
+	}
+
+	return properties, nil
 }

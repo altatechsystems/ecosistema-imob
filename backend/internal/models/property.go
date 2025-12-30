@@ -59,6 +59,9 @@ type Property struct {
 	CoverImageURL      string  `firestore:"-" json:"cover_image_url,omitempty"`                                   // Computed field from listing photos
 	Images             []Photo `firestore:"-" json:"images,omitempty"`                                            // Computed field from listing photos
 
+	// Broker (Captador) - Populated for public display
+	Captador *BrokerPublic `firestore:"-" json:"captador,omitempty"` // Computed field with broker public data
+
 	// Deduplicação
 	Fingerprint       string `firestore:"fingerprint" json:"fingerprint"` // hash(street+number+city+property_type+area)
 	PossibleDuplicate bool   `firestore:"possible_duplicate" json:"possible_duplicate"`
