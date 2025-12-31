@@ -382,10 +382,10 @@ func (s *PropertyService) ListProperties(ctx context.Context, tenantID string, f
 		return nil, fmt.Errorf("failed to list properties: %w", err)
 	}
 
-	// Populate cover image URL from canonical listing and broker data
+	// Populate cover image URL, images array, and broker data
 	for _, property := range properties {
 		if property.CanonicalListingID != "" {
-			// Get listing to fetch first photo
+			// Get listing to fetch photos
 			listing, err := s.listingRepo.Get(ctx, tenantID, property.CanonicalListingID)
 			if err != nil {
 				// Log error but don't fail the whole request
@@ -393,6 +393,20 @@ func (s *PropertyService) ListProperties(ctx context.Context, tenantID string, f
 			}
 			if listing != nil && len(listing.Photos) > 0 {
 				property.CoverImageURL = listing.Photos[0].ThumbURL
+
+				// Populate images array for navigation
+				property.Images = make([]models.Photo, len(listing.Photos))
+				for i, photo := range listing.Photos {
+					property.Images[i] = models.Photo{
+						ID:        photo.ID,
+						URL:       photo.LargeURL,
+						ThumbURL:  photo.ThumbURL,
+						MediumURL: photo.MediumURL,
+						LargeURL:  photo.LargeURL,
+						Order:     photo.Order,
+						IsCover:   photo.IsCover,
+					}
+				}
 			}
 		}
 

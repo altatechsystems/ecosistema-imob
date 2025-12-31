@@ -25,7 +25,7 @@ export default function PropertiesPage() {
       setIsLoading(true);
       const startTime = performance.now();
 
-      const result = await api.getProperties(filters, { limit: 500 });
+      const result = await api.getProperties(filters, { limit: 50 });
 
       const loadTime = performance.now() - startTime;
       console.log(`✅ Loaded ${result.data?.length || 0} properties in ${loadTime.toFixed(0)}ms`);
