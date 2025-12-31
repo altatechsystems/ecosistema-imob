@@ -124,10 +124,12 @@ const (
 type LeadStatus string
 
 const (
-	LeadStatusNew       LeadStatus = "new"
-	LeadStatusContacted LeadStatus = "contacted"
-	LeadStatusQualified LeadStatus = "qualified"
-	LeadStatusLost      LeadStatus = "lost"
+	LeadStatusNew         LeadStatus = "new"
+	LeadStatusContacted   LeadStatus = "contacted"
+	LeadStatusQualified   LeadStatus = "qualified"
+	LeadStatusNegotiating LeadStatus = "negotiating"
+	LeadStatusConverted   LeadStatus = "converted"
+	LeadStatusLost        LeadStatus = "lost"
 )
 
 // ActorType defines the type of actor performing an action

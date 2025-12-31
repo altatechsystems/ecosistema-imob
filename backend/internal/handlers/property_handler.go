@@ -34,6 +34,10 @@ func (h *PropertyHandler) RegisterRoutes(router *gin.RouterGroup) {
 		properties.POST("/:id/status", h.UpdateStatus)
 		properties.POST("/:id/visibility", h.UpdateVisibility)
 		properties.GET("/:id/duplicates", h.CheckDuplicates)
+
+		// PROMPT 08: Property Status Confirmation
+		properties.PATCH("/:id/confirmations", h.ConfirmPropertyStatusPrice)
+		properties.POST("/:id/owner-confirmation-link", h.GenerateOwnerConfirmationLink)
 	}
 }
 
@@ -453,6 +457,163 @@ func (h *PropertyHandler) CheckDuplicates(c *gin.Context) {
 		"data":       duplicates,
 		"count":      len(duplicates),
 		"has_dupes":  len(duplicates) > 0,
+	})
+}
+
+// ========== PROMPT 08: Property Status Confirmation ==========
+
+// ConfirmPropertyStatusPriceRequest represents the request to confirm status/price
+type ConfirmPropertyStatusPriceRequest struct {
+	ConfirmStatus      *models.PropertyStatus `json:"confirm_status,omitempty"`       // available, unavailable
+	ConfirmPriceAmount *float64               `json:"confirm_price_amount,omitempty"` // new price
+	Note               string                 `json:"note,omitempty"`                 // internal note
+	Reason             string                 `json:"reason,omitempty"`               // operator_reported, owner_reported, stale_refresh
+}
+
+// ConfirmPropertyStatusPrice handles operator confirmation of property status/price
+// PATCH /api/v1/properties/{propertyId}/confirmations
+// @Summary Confirm property status and/or price
+// @Description Operator confirms property availability status and/or price (PROMPT 08)
+// @Tags properties
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param id path string true "Property ID"
+// @Param body body ConfirmPropertyStatusPriceRequest true "Confirmation data"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/{tenant_id}/properties/{id}/confirmations [patch]
+func (h *PropertyHandler) ConfirmPropertyStatusPrice(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	propertyID := c.Param("id")
+
+	var req ConfirmPropertyStatusPriceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Get user/actor from context (set by auth middleware)
+	actorID, exists := c.Get("user_id")
+	if !exists {
+		actorID = "system"
+	}
+
+	// Call service to confirm
+	property, err := h.propertyService.ConfirmPropertyStatusPrice(
+		c.Request.Context(),
+		tenantID,
+		propertyID,
+		actorID.(string),
+		req.ConfirmStatus,
+		req.ConfirmPriceAmount,
+		req.Note,
+		req.Reason,
+	)
+	if err != nil {
+		if err == repositories.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "property not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    property,
+	})
+}
+
+// GenerateOwnerConfirmationLinkRequest represents the request to generate owner link
+type GenerateOwnerConfirmationLinkRequest struct {
+	DeliveryHint string  `json:"delivery_hint,omitempty"` // whatsapp, sms, email (optional, apenas registro)
+	OwnerID      *string `json:"owner_id,omitempty"`      // opcional
+}
+
+// GenerateOwnerConfirmationLinkResponse represents the response
+type GenerateOwnerConfirmationLinkResponse struct {
+	ConfirmationURL string `json:"confirmation_url"`
+	ExpiresAt       string `json:"expires_at"`
+	TokenID         string `json:"token_id"`
+}
+
+// GenerateOwnerConfirmationLink generates a secure link for passive owner confirmation
+// POST /api/v1/properties/{propertyId}/owner-confirmation-link
+// @Summary Generate owner confirmation link
+// @Description Generate a secure, time-limited link for property owner to confirm status/price without login (PROMPT 08)
+// @Tags properties
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param id path string true "Property ID"
+// @Param body body GenerateOwnerConfirmationLinkRequest true "Link generation params"
+// @Success 200 {object} GenerateOwnerConfirmationLinkResponse
+// @Failure 400 {object} map[string]interface{}
+// @Failure 404 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/{tenant_id}/properties/{id}/owner-confirmation-link [post]
+func (h *PropertyHandler) GenerateOwnerConfirmationLink(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	propertyID := c.Param("id")
+
+	var req GenerateOwnerConfirmationLinkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Get user/actor from context
+	actorID, exists := c.Get("user_id")
+	if !exists {
+		actorID = "system"
+	}
+
+	// Call service to generate link
+	confirmationURL, tokenID, expiresAt, err := h.propertyService.GenerateOwnerConfirmationLink(
+		c.Request.Context(),
+		tenantID,
+		propertyID,
+		actorID.(string),
+		req.OwnerID,
+		req.DeliveryHint,
+	)
+	if err != nil {
+		if err == repositories.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "property not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": GenerateOwnerConfirmationLinkResponse{
+			ConfirmationURL: confirmationURL,
+			ExpiresAt:       expiresAt.Format("2006-01-02T15:04:05Z07:00"),
+			TokenID:         tokenID,
+		},
 	})
 }
 

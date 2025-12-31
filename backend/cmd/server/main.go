@@ -130,27 +130,29 @@ func initializeFirebase(ctx context.Context, cfg *config.Config) (*firebase.App,
 
 // Repositories holds all repository instances
 type Repositories struct {
-	TenantRepo             *repositories.TenantRepository
-	BrokerRepo             *repositories.BrokerRepository
-	OwnerRepo              *repositories.OwnerRepository
-	PropertyRepo           *repositories.PropertyRepository
-	ListingRepo            *repositories.ListingRepository
-	PropertyBrokerRoleRepo *repositories.PropertyBrokerRoleRepository
-	LeadRepo               *repositories.LeadRepository
-	ActivityLogRepo        *repositories.ActivityLogRepository
+	TenantRepo                    *repositories.TenantRepository
+	BrokerRepo                    *repositories.BrokerRepository
+	OwnerRepo                     *repositories.OwnerRepository
+	PropertyRepo                  *repositories.PropertyRepository
+	ListingRepo                   *repositories.ListingRepository
+	PropertyBrokerRoleRepo        *repositories.PropertyBrokerRoleRepository
+	LeadRepo                      *repositories.LeadRepository
+	ActivityLogRepo               *repositories.ActivityLogRepository
+	OwnerConfirmationTokenRepo    *repositories.OwnerConfirmationTokenRepository // PROMPT 08
 }
 
 // initializeRepositories initializes all repositories
 func initializeRepositories(client *firestore.Client) *Repositories {
 	return &Repositories{
-		TenantRepo:             repositories.NewTenantRepository(client),
-		BrokerRepo:             repositories.NewBrokerRepository(client),
-		OwnerRepo:              repositories.NewOwnerRepository(client),
-		PropertyRepo:           repositories.NewPropertyRepository(client),
-		ListingRepo:            repositories.NewListingRepository(client),
-		PropertyBrokerRoleRepo: repositories.NewPropertyBrokerRoleRepository(client),
-		LeadRepo:               repositories.NewLeadRepository(client),
-		ActivityLogRepo:        repositories.NewActivityLogRepository(client),
+		TenantRepo:                 repositories.NewTenantRepository(client),
+		BrokerRepo:                 repositories.NewBrokerRepository(client),
+		OwnerRepo:                  repositories.NewOwnerRepository(client),
+		PropertyRepo:               repositories.NewPropertyRepository(client),
+		ListingRepo:                repositories.NewListingRepository(client),
+		PropertyBrokerRoleRepo:     repositories.NewPropertyBrokerRoleRepository(client),
+		LeadRepo:                   repositories.NewLeadRepository(client),
+		ActivityLogRepo:            repositories.NewActivityLogRepository(client),
+		OwnerConfirmationTokenRepo: repositories.NewOwnerConfirmationTokenRepository(client), // PROMPT 08
 	}
 }
 
@@ -167,6 +169,7 @@ type Services struct {
 	StorageService            *storage.StorageService
 	PhotoProcessor            *services.PhotoProcessor
 	ImportService             *services.ImportService
+	OwnerConfirmationService  *services.OwnerConfirmationService // PROMPT 08
 }
 
 // initializeServices initializes all services
@@ -199,6 +202,26 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 		log.Println("⚠️  ImportService initialized WITHOUT photo processing")
 	}
 
+	// PROMPT 08: Initialize OwnerConfirmationService
+	ownerConfirmationService := services.NewOwnerConfirmationService(
+		repos.OwnerConfirmationTokenRepo,
+		repos.PropertyRepo,
+		repos.OwnerRepo,
+		repos.ActivityLogRepo,
+	)
+
+	// Initialize PropertyService
+	propertyService := services.NewPropertyService(
+		repos.PropertyRepo,
+		repos.ListingRepo,
+		repos.OwnerRepo,
+		repos.BrokerRepo,
+		repos.TenantRepo,
+		repos.ActivityLogRepo,
+	)
+	// PROMPT 08: Inject OwnerConfirmationService into PropertyService
+	propertyService.SetOwnerConfirmationService(ownerConfirmationService)
+
 	return &Services{
 		TenantService: services.NewTenantService(
 			repos.TenantRepo,
@@ -217,14 +240,7 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 			repos.TenantRepo,
 			repos.ActivityLogRepo,
 		),
-		PropertyService: services.NewPropertyService(
-			repos.PropertyRepo,
-			repos.ListingRepo,
-			repos.OwnerRepo,
-			repos.BrokerRepo,
-			repos.TenantRepo,
-			repos.ActivityLogRepo,
-		),
+		PropertyService: propertyService, // Use the pre-configured instance
 		ListingService: services.NewListingService(
 			repos.ListingRepo,
 			repos.PropertyRepo,
@@ -250,9 +266,10 @@ func initializeServices(ctx context.Context, cfg *config.Config, repos *Reposito
 			repos.ActivityLogRepo,
 			repos.TenantRepo,
 		),
-		StorageService: storageService,
-		PhotoProcessor: photoProcessor,
-		ImportService:  importService,
+		StorageService:           storageService,
+		PhotoProcessor:           photoProcessor,
+		ImportService:            importService,
+		OwnerConfirmationService: ownerConfirmationService, // PROMPT 08
 	}
 }
 
@@ -269,6 +286,7 @@ type Handlers struct {
 	ActivityLogHandler        *handlers.ActivityLogHandler
 	StorageHandler            *handlers.StorageHandler
 	ImportHandler             *handlers.ImportHandler
+	OwnerConfirmationHandler  *handlers.OwnerConfirmationHandler // PROMPT 08
 }
 
 // initializeHandlers initializes all handlers
@@ -290,6 +308,7 @@ func initializeHandlers(authClient *auth.Client, firestoreClient *firestore.Clie
 		ActivityLogHandler:        handlers.NewActivityLogHandler(services.ActivityLogService),
 		StorageHandler:            storageHandler,
 		ImportHandler:             handlers.NewImportHandler(services.ImportService),
+		OwnerConfirmationHandler:  handlers.NewOwnerConfirmationHandler(services.OwnerConfirmationService), // PROMPT 08
 	}
 }
 
@@ -326,6 +345,11 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 			},
 		})
 	})
+
+	// PROMPT 08: Public owner confirmation routes (no authentication required)
+	if handlers.OwnerConfirmationHandler != nil {
+		handlers.OwnerConfirmationHandler.RegisterPublicRoutes(router)
+	}
 
 	// API routes
 	api := router.Group("/api/v1")

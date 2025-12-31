@@ -15,12 +15,13 @@ import (
 
 // PropertyService handles business logic for property management
 type PropertyService struct {
-	propertyRepo    *repositories.PropertyRepository
-	listingRepo     *repositories.ListingRepository
-	ownerRepo       *repositories.OwnerRepository
-	brokerRepo      *repositories.BrokerRepository
-	tenantRepo      *repositories.TenantRepository
-	activityLogRepo *repositories.ActivityLogRepository
+	propertyRepo             *repositories.PropertyRepository
+	listingRepo              *repositories.ListingRepository
+	ownerRepo                *repositories.OwnerRepository
+	brokerRepo               *repositories.BrokerRepository
+	tenantRepo               *repositories.TenantRepository
+	activityLogRepo          *repositories.ActivityLogRepository
+	ownerConfirmationService *OwnerConfirmationService // PROMPT 08: for generating owner confirmation links
 }
 
 // NewPropertyService creates a new property service
@@ -739,4 +740,216 @@ func (s *PropertyService) logActivity(ctx context.Context, tenantID, eventType s
 	}
 
 	return s.activityLogRepo.Create(ctx, log)
+}
+
+// ========== PROMPT 08: Property Status Confirmation ==========
+
+// ConfirmPropertyStatusPrice confirms property status and/or price by operator
+// Updates status_confirmed_at, price_confirmed_at, and recalculates visibility
+func (s *PropertyService) ConfirmPropertyStatusPrice(
+	ctx context.Context,
+	tenantID string,
+	propertyID string,
+	actorID string,
+	confirmStatus *models.PropertyStatus,
+	confirmPriceAmount *float64,
+	note string,
+	reason string,
+) (*models.Property, error) {
+	// Get property
+	property, err := s.propertyRepo.Get(ctx, tenantID, propertyID)
+	if err != nil {
+		return nil, err
+	}
+
+	updates := make(map[string]interface{})
+	now := time.Now()
+	metadata := map[string]interface{}{
+		"property_id": propertyID,
+		"actor_id":    actorID,
+	}
+
+	// Confirm status if provided
+	if confirmStatus != nil {
+		if err := s.validatePropertyStatus(*confirmStatus); err != nil {
+			return nil, err
+		}
+
+		updates["status"] = *confirmStatus
+		updates["status_confirmed_at"] = now
+
+		if reason != "" {
+			updates["pending_reason"] = reason
+		}
+
+		metadata["status"] = *confirmStatus
+		metadata["status_confirmed_at"] = now
+
+		// Log status confirmation
+		_ = s.logActivity(ctx, tenantID, "property_status_confirmed", models.ActorTypeUser, actorID, metadata)
+	}
+
+	// Confirm price if provided
+	if confirmPriceAmount != nil {
+		updates["price_amount"] = *confirmPriceAmount
+		updates["price_confirmed_at"] = now
+
+		metadata["price_amount"] = *confirmPriceAmount
+		metadata["price_confirmed_at"] = now
+
+		// Log price confirmation
+		_ = s.logActivity(ctx, tenantID, "property_price_confirmed", models.ActorTypeUser, actorID, metadata)
+	}
+
+	if note != "" {
+		metadata["note"] = note
+	}
+
+	// Recalculate visibility based on new status/confirmation
+	newVisibility := s.calculateVisibility(property, confirmStatus, &now)
+	if newVisibility != property.Visibility {
+		updates["visibility"] = newVisibility
+		metadata["visibility_changed"] = newVisibility
+
+		_ = s.logActivity(ctx, tenantID, "property_visibility_changed", models.ActorTypeSystem, "", map[string]interface{}{
+			"property_id":    propertyID,
+			"old_visibility": property.Visibility,
+			"new_visibility": newVisibility,
+			"reason":         "status_price_confirmation",
+		})
+	}
+
+	// Update property
+	if err := s.propertyRepo.Update(ctx, tenantID, propertyID, updates); err != nil {
+		return nil, fmt.Errorf("failed to update property: %w", err)
+	}
+
+	// Return updated property
+	return s.propertyRepo.Get(ctx, tenantID, propertyID)
+}
+
+// GenerateOwnerConfirmationLink generates a secure link for passive owner confirmation
+// Returns: confirmationURL, tokenID, expiresAt, error
+// Delegates to OwnerConfirmationService
+func (s *PropertyService) GenerateOwnerConfirmationLink(
+	ctx context.Context,
+	tenantID string,
+	propertyID string,
+	actorID string,
+	ownerID *string,
+	deliveryHint string,
+) (string, string, time.Time, error) {
+	if s.ownerConfirmationService == nil {
+		return "", "", time.Time{}, fmt.Errorf("owner confirmation service not initialized")
+	}
+
+	return s.ownerConfirmationService.GenerateOwnerConfirmationLink(
+		ctx,
+		tenantID,
+		propertyID,
+		actorID,
+		ownerID,
+		deliveryHint,
+	)
+}
+
+// SetOwnerConfirmationService sets the owner confirmation service (for dependency injection)
+func (s *PropertyService) SetOwnerConfirmationService(service *OwnerConfirmationService) {
+	s.ownerConfirmationService = service
+}
+
+// calculateVisibility determines the visibility based on status and confirmation time
+// PROMPT 08: Business logic for hiding stale/unavailable properties
+func (s *PropertyService) calculateVisibility(
+	property *models.Property,
+	newStatus *models.PropertyStatus,
+	confirmedAt *time.Time,
+) models.PropertyVisibility {
+	status := property.Status
+	if newStatus != nil {
+		status = *newStatus
+	}
+
+	// If unavailable, hide from public
+	if status == models.PropertyStatusUnavailable {
+		return models.PropertyVisibilityPrivate
+	}
+
+	// Check if status is stale (older than hide_after_days)
+	hideAfterDays := 30 // TODO: make this configurable
+	if property.StatusConfirmedAt != nil {
+		daysSinceConfirmation := int(time.Since(*property.StatusConfirmedAt).Hours() / 24)
+		if daysSinceConfirmation > hideAfterDays {
+			return models.PropertyVisibilityPrivate
+		}
+	} else if confirmedAt == nil {
+		// No confirmation at all - keep private
+		return models.PropertyVisibilityPrivate
+	}
+
+	// If recently confirmed or being confirmed now, can be public
+	// (assuming operator wants it public)
+	if property.Visibility == models.PropertyVisibilityPrivate {
+		// Don't auto-upgrade to public, operator must do that explicitly
+		return models.PropertyVisibilityPrivate
+	}
+
+	// Return current visibility if it was already public/network/marketplace
+	return property.Visibility
+}
+
+// RecalculateStalenessAndVisibility recalculates pending_confirmation and visibility
+// for properties based on confirmation timestamps
+// PROMPT 08: Stale property detection logic
+func (s *PropertyService) RecalculateStalenessAndVisibility(ctx context.Context, tenantID string, propertyID string) error {
+	property, err := s.propertyRepo.Get(ctx, tenantID, propertyID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	updates := make(map[string]interface{})
+
+	// Configuration (TODO: move to tenant config)
+	statusTTLDays := 15 // status becomes "pending" after this many days
+	hideAfterDays := 30 // property hidden after this many days
+
+	// Check status staleness
+	if property.StatusConfirmedAt == nil {
+		// No confirmation yet - mark as pending
+		if property.Status != models.PropertyStatusPendingConfirmation {
+			updates["status"] = models.PropertyStatusPendingConfirmation
+			updates["pending_reason"] = "stale_status"
+		}
+	} else {
+		daysSinceStatus := int(now.Sub(*property.StatusConfirmedAt).Hours() / 24)
+
+		if daysSinceStatus > hideAfterDays {
+			// Hide from public
+			if property.Visibility == models.PropertyVisibilityPublic ||
+				property.Visibility == models.PropertyVisibilityMarketplace {
+				updates["visibility"] = models.PropertyVisibilityPrivate
+				updates["pending_reason"] = "stale_status"
+
+				_ = s.logActivity(ctx, tenantID, "property_hidden_stale", models.ActorTypeSystem, "", map[string]interface{}{
+					"property_id":             propertyID,
+					"days_since_confirmation": daysSinceStatus,
+					"reason":                  "stale_status",
+				})
+			}
+		} else if daysSinceStatus > statusTTLDays {
+			// Mark as pending confirmation
+			if property.Status != models.PropertyStatusPendingConfirmation {
+				updates["status"] = models.PropertyStatusPendingConfirmation
+				updates["pending_reason"] = "stale_status"
+			}
+		}
+	}
+
+	// Apply updates if any
+	if len(updates) > 0 {
+		return s.propertyRepo.Update(ctx, tenantID, propertyID, updates)
+	}
+
+	return nil
 }
