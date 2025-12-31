@@ -96,11 +96,13 @@ export default function PropertyDetailPage() {
 
   const [property, setProperty] = useState<Property | null>(null);
   const [owner, setOwner] = useState<Owner | null>(null);
+  const [broker, setBroker] = useState<any | null>(null);
   const [listing, setListing] = useState<Listing | null>(null);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingOwner, setLoadingOwner] = useState(false);
+  const [loadingBroker, setLoadingBroker] = useState(false);
   const [error, setError] = useState('');
 
   // PROMPT 08: Confirmation states
@@ -150,6 +152,11 @@ export default function PropertyDetailPage() {
       if (propertyData.owner_id) {
         fetchOwnerDetails(tenantId, propertyData.owner_id);
       }
+
+      // Buscar dados do captador se existir captador_id
+      if (propertyData.captador_id) {
+        fetchBrokerDetails(tenantId, propertyData.captador_id);
+      }
     } catch (err: any) {
       console.error('Erro ao buscar detalhes:', err);
       setError(err.message);
@@ -191,6 +198,42 @@ export default function PropertyDetailPage() {
       console.error('Erro ao buscar proprietário:', err);
     } finally {
       setLoadingOwner(false);
+    }
+  };
+
+  const fetchBrokerDetails = async (tenantId: string, brokerId: string) => {
+    try {
+      setLoadingBroker(true);
+
+      const { auth } = await import('@/lib/firebase');
+      const user = auth.currentUser;
+
+      if (!user) {
+        console.error('Usuário não autenticado');
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/brokers/${brokerId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Erro ao buscar dados do corretor');
+      }
+
+      const data = await response.json();
+      setBroker(data.data);
+    } catch (err: any) {
+      console.error('Erro ao buscar corretor:', err);
+    } finally {
+      setLoadingBroker(false);
     }
   };
 
@@ -756,26 +799,76 @@ export default function PropertyDetailPage() {
             <div className="bg-white rounded-lg shadow-sm p-4 md:p-6">
               <h3 className="text-base md:text-lg font-bold text-gray-900 mb-4">Captador</h3>
 
-              <div className="space-y-3 text-xs md:text-sm">
-                <div>
-                  <label className="block text-gray-600 mb-1">Nome do Corretor</label>
-                  <p className="font-medium text-gray-900">{property.captador_name}</p>
+              {loadingBroker ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
+              ) : broker ? (
+                <div className="space-y-3 text-xs md:text-sm">
+                  {/* Broker Photo and Name */}
+                  <div className="flex items-center gap-3 pb-3 border-b border-gray-200">
+                    {broker.photo_url ? (
+                      <img
+                        src={broker.photo_url}
+                        alt={broker.name || 'Corretor'}
+                        className="w-16 h-16 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                        <span className="text-2xl font-bold text-blue-600">
+                          {broker.name?.charAt(0).toUpperCase() || 'C'}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-900">{broker.name || property.captador_name}</p>
+                      {broker.creci && (
+                        <p className="text-xs text-gray-600">CRECI: {broker.creci}</p>
+                      )}
+                    </div>
+                  </div>
 
-                {property.captador_id ? (
+                  {broker.email && (
+                    <div>
+                      <label className="block text-gray-600 mb-1">E-mail</label>
+                      <p className="font-medium text-gray-900">{broker.email}</p>
+                    </div>
+                  )}
+
+                  {broker.phone && (
+                    <div>
+                      <label className="block text-gray-600 mb-1">Telefone</label>
+                      <p className="font-medium text-gray-900">{broker.phone}</p>
+                    </div>
+                  )}
+
+                  {broker.cpf && (
+                    <div>
+                      <label className="block text-gray-600 mb-1">CPF</label>
+                      <p className="font-medium text-gray-900">{broker.cpf}</p>
+                    </div>
+                  )}
+
                   <div className="pt-2">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      ✓ Cadastro completo
-                    </span>
                     <button
                       type="button"
                       onClick={() => router.push(`/dashboard/corretores/${property.captador_id}`)}
-                      className="ml-3 text-xs md:text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      className="text-xs md:text-sm text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       Ver detalhes do corretor →
                     </button>
                   </div>
-                ) : (
+                </div>
+              ) : property.captador_id ? (
+                <div className="text-gray-500 text-xs md:text-sm py-4">
+                  <p>Erro ao carregar dados do corretor</p>
+                </div>
+              ) : (
+                <div className="space-y-3 text-xs md:text-sm">
+                  <div>
+                    <label className="block text-gray-600 mb-1">Nome do Corretor</label>
+                    <p className="font-medium text-gray-900">{property.captador_name}</p>
+                  </div>
                   <div className="pt-2">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                       ⚠ Cadastro pendente
@@ -784,8 +877,8 @@ export default function PropertyDetailPage() {
                       O captador precisa completar o cadastro com CPF e CRECI
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
