@@ -7,7 +7,6 @@ import { adminApi } from '@/lib/api';
 import { Lead, LeadStatus, LeadChannel } from '@/types/lead';
 
 type LeadStatusFilter = 'all' | LeadStatus;
-type LeadChannelFilter = 'all' | LeadChannel;
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -17,7 +16,6 @@ export default function LeadsPage() {
   const [error, setError] = useState('');
   const [displayCount, setDisplayCount] = useState(20);
   const [statusFilter, setStatusFilter] = useState<LeadStatusFilter>('all');
-  const [channelFilter, setChannelFilter] = useState<LeadChannelFilter>('all');
   const observerTarget = useRef<HTMLDivElement>(null);
   const itemsPerPage = 20;
 
@@ -94,14 +92,12 @@ export default function LeadsPage() {
   const filteredLeads = useMemo(() => {
     let filtered = leads;
 
+    // Filter only WhatsApp leads
+    filtered = filtered.filter(lead => lead.channel === LeadChannel.WHATSAPP);
+
     // Apply status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(lead => lead.status === statusFilter);
-    }
-
-    // Apply channel filter
-    if (channelFilter !== 'all') {
-      filtered = filtered.filter(lead => lead.channel === channelFilter);
     }
 
     // Apply search term filter
@@ -115,7 +111,7 @@ export default function LeadsPage() {
     }
 
     return filtered;
-  }, [leads, searchTerm, statusFilter, channelFilter]);
+  }, [leads, searchTerm, statusFilter]);
 
   // Infinite scroll - show only displayCount items
   const displayedLeads = useMemo(() =>
@@ -128,7 +124,7 @@ export default function LeadsPage() {
   // Reset display count when search or filter changes
   useEffect(() => {
     setDisplayCount(20);
-  }, [searchTerm, statusFilter, channelFilter]);
+  }, [searchTerm, statusFilter]);
 
   // Infinite scroll observer
   useEffect(() => {
@@ -203,201 +199,176 @@ export default function LeadsPage() {
     <div className="p-3 sm:p-4 md:p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Leads</h1>
-        <p className="text-gray-600">Gerencie todos os contatos e oportunidades</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Leads WhatsApp</h1>
+        <p className="text-gray-600">Acompanhe o funil de conversão dos seus leads</p>
       </div>
 
-      {/* Stats Cards - Status */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3 mb-4">
-        <button
-          onClick={() => setStatusFilter('all')}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === 'all' ? 'ring-2 ring-blue-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Total</p>
-              <p className="text-base sm:text-lg font-bold text-gray-900">{stats.total}</p>
-            </div>
-          </div>
-        </button>
+      {/* Funnel Visualization - Modern Sales Pipeline */}
+      <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Funil de Vendas</h2>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.NEW)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.NEW ? 'ring-2 ring-blue-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+          {/* Step 1: Novo */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.NEW)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.NEW ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.NEW ? 'border-blue-500 shadow-lg' : 'border-blue-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-blue-600 bg-blue-200 px-2 py-1 rounded-full">1</span>
+              </div>
+              <p className="text-2xl font-bold text-blue-900 mb-1">{stats.new}</p>
+              <p className="text-xs font-medium text-blue-700">Novos</p>
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 text-blue-300 hidden lg:block">
+                →
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Novos</p>
-              <p className="text-base sm:text-lg font-bold text-blue-600">{stats.new}</p>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.CONTACTED)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.CONTACTED ? 'ring-2 ring-yellow-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-yellow-100 rounded flex items-center justify-center flex-shrink-0">
-              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-600" />
+          {/* Step 2: Contatado */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.CONTACTED)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.CONTACTED ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.CONTACTED ? 'border-yellow-500 shadow-lg' : 'border-yellow-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-yellow-500 rounded-lg flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-yellow-600 bg-yellow-200 px-2 py-1 rounded-full">2</span>
+              </div>
+              <p className="text-2xl font-bold text-yellow-900 mb-1">{stats.contacted}</p>
+              <p className="text-xs font-medium text-yellow-700">Contatados</p>
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 text-yellow-300 hidden lg:block">
+                →
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Contatados</p>
-              <p className="text-base sm:text-lg font-bold text-yellow-600">{stats.contacted}</p>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.QUALIFIED)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.QUALIFIED ? 'ring-2 ring-purple-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-100 rounded flex items-center justify-center flex-shrink-0">
-              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
+          {/* Step 3: Qualificado */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.QUALIFIED)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.QUALIFIED ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.QUALIFIED ? 'border-purple-500 shadow-lg' : 'border-purple-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-purple-600 bg-purple-200 px-2 py-1 rounded-full">3</span>
+              </div>
+              <p className="text-2xl font-bold text-purple-900 mb-1">{stats.qualified}</p>
+              <p className="text-xs font-medium text-purple-700">Qualificados</p>
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 text-purple-300 hidden lg:block">
+                →
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Qualificados</p>
-              <p className="text-base sm:text-lg font-bold text-purple-600">{stats.qualified}</p>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.NEGOTIATING)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.NEGOTIATING ? 'ring-2 ring-orange-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-orange-100 rounded flex items-center justify-center flex-shrink-0">
-              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
+          {/* Step 4: Negociando */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.NEGOTIATING)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.NEGOTIATING ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.NEGOTIATING ? 'border-orange-500 shadow-lg' : 'border-orange-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                  <MessageSquare className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-orange-600 bg-orange-200 px-2 py-1 rounded-full">4</span>
+              </div>
+              <p className="text-2xl font-bold text-orange-900 mb-1">{stats.negotiating}</p>
+              <p className="text-xs font-medium text-orange-700">Negociando</p>
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 text-orange-300 hidden lg:block">
+                →
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Negociando</p>
-              <p className="text-base sm:text-lg font-bold text-orange-600">{stats.negotiating}</p>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.CONVERTED)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.CONVERTED ? 'ring-2 ring-green-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
-              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
+          {/* Step 5: Convertido */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.CONVERTED)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.CONVERTED ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.CONVERTED ? 'border-green-500 shadow-lg' : 'border-green-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-green-600 bg-green-200 px-2 py-1 rounded-full">✓</span>
+              </div>
+              <p className="text-2xl font-bold text-green-900 mb-1">{stats.converted}</p>
+              <p className="text-xs font-medium text-green-700">Convertidos</p>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Convertidos</p>
-              <p className="text-base sm:text-lg font-bold text-green-600">{stats.converted}</p>
-            </div>
-          </div>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setStatusFilter(LeadStatus.LOST)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            statusFilter === LeadStatus.LOST ? 'ring-2 ring-red-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-red-100 rounded flex items-center justify-center flex-shrink-0">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
+          {/* Step 6: Perdidos */}
+          <button
+            onClick={() => setStatusFilter(LeadStatus.LOST)}
+            className={`relative group transition-all hover:scale-105 ${
+              statusFilter === LeadStatus.LOST ? 'scale-105' : ''
+            }`}
+          >
+            <div className={`bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border-2 transition-all ${
+              statusFilter === LeadStatus.LOST ? 'border-red-500 shadow-lg' : 'border-red-200'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xs font-medium text-red-600 bg-red-200 px-2 py-1 rounded-full">✕</span>
+              </div>
+              <p className="text-2xl font-bold text-red-900 mb-1">{stats.lost}</p>
+              <p className="text-xs font-medium text-red-700">Perdidos</p>
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Perdidos</p>
-              <p className="text-base sm:text-lg font-bold text-red-600">{stats.lost}</p>
-            </div>
-          </div>
-        </button>
-      </div>
+          </button>
+        </div>
 
-      {/* Channel Filters */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-4">
-        <button
-          onClick={() => setChannelFilter('all')}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            channelFilter === 'all' ? 'ring-2 ring-blue-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Todos Canais</p>
-              <p className="text-base sm:text-lg font-bold text-gray-900">{stats.total}</p>
-            </div>
+        {/* Funnel Metrics */}
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Total de Leads</p>
+            <p className="text-2xl font-bold text-gray-900">{stats.whatsapp}</p>
+            <p className="text-xs text-gray-500 mt-1">via WhatsApp</p>
           </div>
-        </button>
-
-        <button
-          onClick={() => setChannelFilter(LeadChannel.WHATSAPP)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            channelFilter === LeadChannel.WHATSAPP ? 'ring-2 ring-green-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
-              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">WhatsApp</p>
-              <p className="text-base sm:text-lg font-bold text-green-600">{stats.whatsapp}</p>
-            </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Taxa de Conversão</p>
+            <p className="text-2xl font-bold text-green-600">
+              {stats.whatsapp > 0 ? ((stats.converted / stats.whatsapp) * 100).toFixed(1) : 0}%
+            </p>
+            <p className="text-xs text-gray-500 mt-1">{stats.converted} convertidos de {stats.whatsapp}</p>
           </div>
-        </button>
-
-        <button
-          onClick={() => setChannelFilter(LeadChannel.FORM)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            channelFilter === LeadChannel.FORM ? 'ring-2 ring-blue-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
-              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Formulário</p>
-              <p className="text-base sm:text-lg font-bold text-blue-600">{stats.form}</p>
-            </div>
+          <div className="bg-gray-50 rounded-lg p-4">
+            <p className="text-sm text-gray-600 mb-1">Em Atendimento</p>
+            <p className="text-2xl font-bold text-orange-600">
+              {stats.contacted + stats.qualified + stats.negotiating}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">aguardando fechamento</p>
           </div>
-        </button>
-
-        <button
-          onClick={() => setChannelFilter(LeadChannel.PHONE)}
-          className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
-            channelFilter === LeadChannel.PHONE ? 'ring-2 ring-purple-500' : ''
-          }`}
-        >
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-100 rounded flex items-center justify-center flex-shrink-0">
-              <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Telefone</p>
-              <p className="text-base sm:text-lg font-bold text-purple-600">{stats.phone}</p>
-            </div>
-          </div>
-        </button>
+        </div>
       </div>
 
       {/* Actions Bar */}
