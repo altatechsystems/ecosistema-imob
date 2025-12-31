@@ -290,7 +290,7 @@ export default function LeadDetailPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-gray-900 text-lg">
-                      {property.reference || property.slug}
+                      {property.title || property.slug || 'Imóvel'}
                     </h3>
                     <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
                       <MapPin className="w-4 h-4" />
@@ -298,7 +298,7 @@ export default function LeadDetailPage() {
                     </p>
                   </div>
                   <span className="text-xl font-bold text-blue-600">
-                    {formatPrice(property.price_amount)}
+                    {formatPrice(property.sale_price || property.rental_price)}
                   </span>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-600 mb-3">
@@ -308,8 +308,8 @@ export default function LeadDetailPage() {
                   {property.bathrooms && property.bathrooms > 0 && (
                     <span>{property.bathrooms} banheiros</span>
                   )}
-                  {property.total_area && property.total_area > 0 && (
-                    <span>{property.total_area}m²</span>
+                  {property.area_sqm && property.area_sqm > 0 && (
+                    <span>{property.area_sqm}m²</span>
                   )}
                 </div>
                 <button
