@@ -436,8 +436,9 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 			// Monthly confirmation scheduler routes
 			tenantScoped.POST("/scheduled-confirmations/schedule", handlers.ScheduledConfirmationHandler.ScheduleMonthlyConfirmations)
 			tenantScoped.POST("/scheduled-confirmations/process", handlers.ScheduledConfirmationHandler.ProcessPendingConfirmations)
-			tenantScoped.GET("/scheduled-confirmations", handlers.ScheduledConfirmationHandler.GetScheduledConfirmations)
+			tenantScoped.GET("/scheduled-confirmations/metrics", handlers.ScheduledConfirmationHandler.GetConfirmationMetrics)
 			tenantScoped.GET("/scheduled-confirmations/broker/:broker_id", handlers.ScheduledConfirmationHandler.GetBrokerScheduledConfirmations)
+			tenantScoped.GET("/scheduled-confirmations", handlers.ScheduledConfirmationHandler.GetScheduledConfirmations)
 		}
 	}
 

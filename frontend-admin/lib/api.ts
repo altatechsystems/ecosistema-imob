@@ -358,6 +358,13 @@ class AdminApiClient {
     );
     return response.data.data || [];
   }
+
+  async getConfirmationMetrics(): Promise<any> {
+    const response = await this.client.get<{ success: boolean; data: any }>(
+      '/scheduled-confirmations/metrics'
+    );
+    return response.data.data;
+  }
 }
 
 export const adminApi = new AdminApiClient();

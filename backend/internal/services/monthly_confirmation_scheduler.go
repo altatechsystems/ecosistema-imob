@@ -263,3 +263,97 @@ func (s *MonthlyConfirmationScheduler) GetScheduledConfirmationsForBroker(ctx co
 
 	return brokerConfirmations, nil
 }
+
+// ConfirmationMetrics represents metrics for scheduled confirmations
+type ConfirmationMetrics struct {
+	TotalConfirmations  int     `json:"total_confirmations"`
+	PendingCount        int     `json:"pending_count"`
+	SentCount           int     `json:"sent_count"`
+	RespondedCount      int     `json:"responded_count"`
+	FailedCount         int     `json:"failed_count"`
+	CancelledCount      int     `json:"cancelled_count"`
+	ResponseRate        float64 `json:"response_rate"`        // Percentage of sent that responded
+	SuccessRate         float64 `json:"success_rate"`         // Percentage of sent that didn't fail
+	InactiveOwnerCount  int     `json:"inactive_owner_count"` // Owners with no response in last 3+ months
+	AverageResponseTime string  `json:"average_response_time"` // Average time to respond
+}
+
+// GetConfirmationMetrics calculates metrics for scheduled confirmations
+func (s *MonthlyConfirmationScheduler) GetConfirmationMetrics(ctx context.Context, tenantID string) (*ConfirmationMetrics, error) {
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant_id is required")
+	}
+
+	// Get all confirmations for the tenant
+	confirmations, err := s.scheduledConfirmationRepo.ListByTenant(ctx, tenantID, nil, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list confirmations: %w", err)
+	}
+
+	metrics := &ConfirmationMetrics{}
+	metrics.TotalConfirmations = len(confirmations)
+
+	var totalResponseTime time.Duration
+	var responseTimeCount int
+	ownerResponseMap := make(map[string]time.Time) // Track last response time per owner
+
+	for _, sc := range confirmations {
+		switch sc.Status {
+		case models.ScheduledConfirmationStatusPending:
+			metrics.PendingCount++
+		case models.ScheduledConfirmationStatusSent:
+			metrics.SentCount++
+		case models.ScheduledConfirmationStatusResponded:
+			metrics.RespondedCount++
+
+			// Calculate response time if both sent_at and responded_at are available
+			if sc.SentAt != nil && sc.RespondedAt != nil {
+				responseTime := sc.RespondedAt.Sub(*sc.SentAt)
+				totalResponseTime += responseTime
+				responseTimeCount++
+			}
+
+			// Track last response per owner
+			if sc.RespondedAt != nil {
+				if lastResponse, exists := ownerResponseMap[sc.OwnerID]; !exists || sc.RespondedAt.After(lastResponse) {
+					ownerResponseMap[sc.OwnerID] = *sc.RespondedAt
+				}
+			}
+		case models.ScheduledConfirmationStatusFailed:
+			metrics.FailedCount++
+		case models.ScheduledConfirmationStatusCancelled:
+			metrics.CancelledCount++
+		}
+	}
+
+	// Calculate response rate (responded / sent)
+	totalSent := metrics.SentCount + metrics.RespondedCount + metrics.FailedCount
+	if totalSent > 0 {
+		metrics.ResponseRate = float64(metrics.RespondedCount) / float64(totalSent) * 100
+		metrics.SuccessRate = float64(totalSent-metrics.FailedCount) / float64(totalSent) * 100
+	}
+
+	// Calculate average response time
+	if responseTimeCount > 0 {
+		avgResponseTime := totalResponseTime / time.Duration(responseTimeCount)
+		hours := int(avgResponseTime.Hours())
+		if hours < 24 {
+			metrics.AverageResponseTime = fmt.Sprintf("%d horas", hours)
+		} else {
+			days := hours / 24
+			metrics.AverageResponseTime = fmt.Sprintf("%d dias", days)
+		}
+	} else {
+		metrics.AverageResponseTime = "N/A"
+	}
+
+	// Count inactive owners (no response in last 3 months)
+	threeMonthsAgo := time.Now().AddDate(0, -3, 0)
+	for _, lastResponse := range ownerResponseMap {
+		if lastResponse.Before(threeMonthsAgo) {
+			metrics.InactiveOwnerCount++
+		}
+	}
+
+	return metrics, nil
+}

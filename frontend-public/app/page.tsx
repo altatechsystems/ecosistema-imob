@@ -10,6 +10,7 @@ import { Property, PropertyFilters, TransactionType, PropertyStatus, PropertyVis
 import { api } from '@/lib/api';
 import { Search, MapPin, Home, TrendingUp, PhoneCall } from 'lucide-react';
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data';
+import { MobileMenu } from '@/components/navigation/mobile-menu';
 
 export default function HomePage() {
   const [featuredProperties, setFeaturedProperties] = React.useState<Property[]>([]);
@@ -57,25 +58,30 @@ export default function HomePage() {
               <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
-              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Imóveis
-              </Link>
-              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Sobre
-              </Link>
-              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Contato
-              </Link>
-              <Link href="/cadastro-imobiliaria" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base hidden lg:inline">
-                Para Imobiliárias
-              </Link>
-              <Link href="http://localhost:3002/login" target="_blank">
-                <Button variant="outline" size="sm">
-                  Login
-                </Button>
-              </Link>
-            </nav>
+            <div className="flex items-center gap-2">
+              <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+                <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Imóveis
+                </Link>
+                <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Sobre
+                </Link>
+                <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Contato
+                </Link>
+                <Link href="/cadastro-imobiliaria" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base hidden lg:inline">
+                  Para Imobiliárias
+                </Link>
+                <Link href="http://localhost:3002/login" target="_blank">
+                  <Button variant="outline" size="sm">
+                    Login
+                  </Button>
+                </Link>
+              </nav>
+
+              {/* Mobile Menu */}
+              <MobileMenu currentPath="/" />
+            </div>
           </div>
         </div>
       </header>

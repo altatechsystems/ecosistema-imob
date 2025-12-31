@@ -24,7 +24,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     },
     ref
   ) => {
-    const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedId = React.useId();
+    const inputId = id || generatedId;
 
     return (
       <div className="w-full">
@@ -90,7 +91,8 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
   ({ className, label, error, helperText, id, ...props }, ref) => {
-    const textareaId = id || `textarea-${Math.random().toString(36).substr(2, 9)}`;
+    const generatedId = React.useId();
+    const textareaId = id || generatedId;
 
     return (
       <div className="w-full">

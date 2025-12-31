@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Property, PropertyFilters, PropertyStatus, PropertyVisibility } from '@/types/property';
 import { api } from '@/lib/api';
 import { Home, Grid, List, Search } from 'lucide-react';
+import { MobileMenu } from '@/components/navigation/mobile-menu';
 
 export default function PropertiesPage() {
   const [properties, setProperties] = React.useState<Property[]>([]);
@@ -63,17 +64,22 @@ export default function PropertiesPage() {
               <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
-              <Link href="/imoveis" className="text-blue-600 font-semibold text-sm lg:text-base">
-                Imóveis
-              </Link>
-              <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Sobre
-              </Link>
-              <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Contato
-              </Link>
-            </nav>
+            <div className="flex items-center gap-2">
+              <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+                <Link href="/imoveis" className="text-blue-600 font-semibold text-sm lg:text-base">
+                  Imóveis
+                </Link>
+                <Link href="/sobre" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Sobre
+                </Link>
+                <Link href="/contato" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Contato
+                </Link>
+              </nav>
+
+              {/* Mobile Menu */}
+              <MobileMenu currentPath="/imoveis" />
+            </div>
           </div>
         </div>
       </header>

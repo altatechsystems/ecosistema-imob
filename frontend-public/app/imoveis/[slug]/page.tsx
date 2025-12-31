@@ -38,6 +38,7 @@ import {
 import { LeadChannel } from '@/types/lead';
 import { PropertyStructuredData } from '@/components/seo/property-structured-data';
 import { BreadcrumbStructuredData } from '@/components/seo/breadcrumb-structured-data';
+import { MobileMenu } from '@/components/navigation/mobile-menu';
 
 export default function PropertyDetailsPage() {
   const params = useParams();
@@ -202,11 +203,16 @@ export default function PropertyDetailsPage() {
               <span className="text-lg sm:text-2xl font-bold text-gray-900">Imobiliária</span>
             </Link>
 
-            <nav className="hidden md:flex items-center gap-4 lg:gap-6">
-              <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
-                Voltar para Imóveis
-              </Link>
-            </nav>
+            <div className="flex items-center gap-2">
+              <nav className="hidden md:flex items-center gap-4 lg:gap-6">
+                <Link href="/imoveis" className="text-gray-700 hover:text-blue-600 font-medium text-sm lg:text-base">
+                  Voltar para Imóveis
+                </Link>
+              </nav>
+
+              {/* Mobile Menu */}
+              <MobileMenu currentPath={`/imoveis/${slug}`} />
+            </div>
           </div>
         </div>
       </header>
@@ -465,7 +471,7 @@ export default function PropertyDetailsPage() {
               <BrokerCard
                 broker={property.captador}
                 variant="full"
-                showContact={true}
+                showContact={false}
               />
             )}
 

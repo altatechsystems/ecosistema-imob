@@ -151,3 +151,23 @@ func (h *ScheduledConfirmationHandler) GetBrokerScheduledConfirmations(c *gin.Co
 		"data":    confirmations,
 	})
 }
+
+// GetConfirmationMetrics gets metrics for scheduled confirmations
+// GET /api/v1/admin/:tenant_id/scheduled-confirmations/metrics
+func (h *ScheduledConfirmationHandler) GetConfirmationMetrics(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+
+	metrics, err := h.scheduler.GetConfirmationMetrics(c.Request.Context(), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    metrics,
+	})
+}

@@ -25,6 +25,8 @@ export interface PropertyCardProps {
 export const PropertyCard = React.memo(function PropertyCard({ property, variant = 'grid' }: PropertyCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
   const [isHovering, setIsHovering] = React.useState(false);
+  const [touchStart, setTouchStart] = React.useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = React.useState<number | null>(null);
 
   const price = property.sale_price || property.rental_price || property.price_amount;
   const priceLabel = property.transaction_type === 'rent' ? 'Aluguel' : property.transaction_type === 'sale' ? 'Venda' : 'Valor';
@@ -44,6 +46,7 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
       : [];
 
   const hasMultipleImages = images.length > 1;
+  const minSwipeDistance = 50;
 
   // Debug log
   React.useEffect(() => {
@@ -58,13 +61,13 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
     }
   }, [property.id, property.images, images.length, hasMultipleImages]);
 
-  const handlePrevImage = (e: React.MouseEvent) => {
+  const handlePrevImage = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
-  const handleNextImage = (e: React.MouseEvent) => {
+  const handleNextImage = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setCurrentImageIndex((prev) => (prev + 1) % images.length);
@@ -74,6 +77,34 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
     e.preventDefault();
     e.stopPropagation();
     setCurrentImageIndex(index);
+  };
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart || !touchEnd) return;
+
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe || isRightSwipe) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isLeftSwipe) {
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
+      } else {
+        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+      }
+    }
   };
 
   const currentImage = images[currentImageIndex]?.medium_url || property.cover_image_url || PLACEHOLDER_IMAGE;
@@ -87,6 +118,9 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
             className="relative w-full sm:w-64 md:w-80 h-56 sm:h-64 md:h-auto flex-shrink-0 group"
             onMouseEnter={() => setIsHovering(true)}
             onMouseLeave={() => setIsHovering(false)}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
           >
             <Image
               src={currentImage}
@@ -95,7 +129,7 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 256px, 320px"
               className="object-cover rounded-t-lg sm:rounded-l-lg sm:rounded-tr-none transition-opacity duration-300"
               loading="lazy"
-              quality={60}
+              quality={75}
               placeholder="blur"
               blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2RkZCIvPjwvc3ZnPg=="
             />
@@ -110,43 +144,49 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
               </Badge>
             </div>
 
-            {/* Navigation Arrows - Show on hover if multiple images */}
-            {hasMultipleImages && isHovering && (
+            {/* Navigation Arrows - Always visible on mobile, hover on desktop */}
+            {hasMultipleImages && (
               <>
                 <button
                   onClick={handlePrevImage}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-1.5 shadow-md z-10 transition-all"
+                  className={`absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 sm:p-1.5 shadow-md z-10 transition-all min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center ${
+                    isHovering ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+                  }`}
                   aria-label="Foto anterior"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-5 h-5 sm:w-4 sm:h-4" />
                 </button>
                 <button
                   onClick={handleNextImage}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-1.5 shadow-md z-10 transition-all"
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 sm:p-1.5 shadow-md z-10 transition-all min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center ${
+                    isHovering ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+                  }`}
                   aria-label="Próxima foto"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
                 </button>
               </>
             )}
 
             {/* Dots Indicator */}
             {hasMultipleImages && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-1 z-10">
                 {images.slice(0, 5).map((_, index) => (
                   <button
                     key={index}
                     onClick={(e) => handleDotClick(e, index)}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${
-                      index === currentImageIndex
-                        ? 'bg-white w-4'
-                        : 'bg-white/60 hover:bg-white/80'
-                    }`}
+                    className="p-2 sm:p-0 touch-manipulation"
                     aria-label={`Ir para foto ${index + 1}`}
-                  />
+                  >
+                    <span className={`block rounded-full transition-all ${
+                      index === currentImageIndex
+                        ? 'w-4 h-1.5 bg-white'
+                        : 'w-1.5 h-1.5 bg-white/60 hover:bg-white/80'
+                    }`} />
+                  </button>
                 ))}
                 {images.length > 5 && (
-                  <span className="text-white text-xs ml-1 drop-shadow">+{images.length - 5}</span>
+                  <span className="text-white text-xs ml-1 drop-shadow self-center">+{images.length - 5}</span>
                 )}
               </div>
             )}
@@ -205,6 +245,9 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
           className="relative w-full h-48 sm:h-56 group"
           onMouseEnter={() => setIsHovering(true)}
           onMouseLeave={() => setIsHovering(false)}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
           <Image
             src={currentImage}
@@ -213,7 +256,7 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             className="object-cover rounded-t-lg transition-opacity duration-300"
             loading="lazy"
-            quality={60}
+            quality={75}
             placeholder="blur"
             blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2RkZCIvPjwvc3ZnPg=="
           />
@@ -228,43 +271,49 @@ export const PropertyCard = React.memo(function PropertyCard({ property, variant
             </Badge>
           </div>
 
-          {/* Navigation Arrows - Show on hover if multiple images */}
-          {hasMultipleImages && isHovering && (
+          {/* Navigation Arrows - Always visible on mobile, hover on desktop */}
+          {hasMultipleImages && (
             <>
               <button
                 onClick={handlePrevImage}
-                className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-1.5 shadow-md z-10 transition-all"
+                className={`absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 sm:p-1.5 shadow-md z-10 transition-all min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center ${
+                  isHovering ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+                }`}
                 aria-label="Foto anterior"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-5 h-5 sm:w-4 sm:h-4" />
               </button>
               <button
                 onClick={handleNextImage}
-                className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-1.5 shadow-md z-10 transition-all"
+                className={`absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full p-2 sm:p-1.5 shadow-md z-10 transition-all min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center ${
+                  isHovering ? 'opacity-100' : 'opacity-100 sm:opacity-0'
+                }`}
                 aria-label="Próxima foto"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-5 h-5 sm:w-4 sm:h-4" />
               </button>
             </>
           )}
 
           {/* Dots Indicator */}
           {hasMultipleImages && (
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-1 z-10">
               {images.slice(0, 5).map((_, index) => (
                 <button
                   key={index}
                   onClick={(e) => handleDotClick(e, index)}
-                  className={`w-1.5 h-1.5 rounded-full transition-all ${
-                    index === currentImageIndex
-                      ? 'bg-white w-4'
-                      : 'bg-white/60 hover:bg-white/80'
-                  }`}
+                  className="p-2 sm:p-0 touch-manipulation"
                   aria-label={`Ir para foto ${index + 1}`}
-                />
+                >
+                  <span className={`block rounded-full transition-all ${
+                    index === currentImageIndex
+                      ? 'w-4 h-1.5 bg-white'
+                      : 'w-1.5 h-1.5 bg-white/60 hover:bg-white/80'
+                  }`} />
+                </button>
               ))}
               {images.length > 5 && (
-                <span className="text-white text-xs ml-1 drop-shadow">+{images.length - 5}</span>
+                <span className="text-white text-xs ml-1 drop-shadow self-center">+{images.length - 5}</span>
               )}
             </div>
           )}

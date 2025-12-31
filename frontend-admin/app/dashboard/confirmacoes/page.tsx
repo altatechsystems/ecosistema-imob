@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Calendar, Send, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw } from 'lucide-react';
+import { Calendar, Send, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, TrendingUp, Users, MessageCircle, Timer } from 'lucide-react';
 import { adminApi } from '@/lib/api';
+import { MetricsCard } from '@/components/dashboard/metrics-card';
 
 interface ScheduledConfirmation {
   id: string;
@@ -30,8 +31,22 @@ interface ScheduleResponse {
   scheduled_confirm_ids?: string[];
 }
 
+interface ConfirmationMetrics {
+  total_confirmations: number;
+  pending_count: number;
+  sent_count: number;
+  responded_count: number;
+  failed_count: number;
+  cancelled_count: number;
+  response_rate: number;
+  success_rate: number;
+  inactive_owner_count: number;
+  average_response_time: string;
+}
+
 export default function ConfirmacoesAgendadasPage() {
   const [confirmations, setConfirmations] = useState<ScheduledConfirmation[]>([]);
+  const [metrics, setMetrics] = useState<ConfirmationMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduling, setScheduling] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -40,6 +55,7 @@ export default function ConfirmacoesAgendadasPage() {
 
   useEffect(() => {
     loadConfirmations();
+    loadMetrics();
   }, [filterStatus]);
 
   const loadConfirmations = async () => {
@@ -53,6 +69,15 @@ export default function ConfirmacoesAgendadasPage() {
       alert('Erro ao carregar confirmações agendadas');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMetrics = async () => {
+    try {
+      const response = await adminApi.getConfirmationMetrics();
+      setMetrics(response);
+    } catch (err: any) {
+      console.error('Erro ao carregar métricas:', err);
     }
   };
 
@@ -142,6 +167,40 @@ export default function ConfirmacoesAgendadasPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Confirmações Agendadas</h1>
         <p className="text-gray-600">Gerencie as confirmações mensais enviadas aos proprietários</p>
       </div>
+
+      {/* Metrics */}
+      {metrics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <MetricsCard
+            title="Taxa de Resposta"
+            value={`${metrics.response_rate.toFixed(1)}%`}
+            subtitle={`${metrics.responded_count} de ${metrics.responded_count + metrics.sent_count} enviados`}
+            icon={TrendingUp}
+            iconColor="text-green-600"
+          />
+          <MetricsCard
+            title="Tempo Médio de Resposta"
+            value={metrics.average_response_time}
+            subtitle="Desde o envio até a resposta"
+            icon={Timer}
+            iconColor="text-blue-600"
+          />
+          <MetricsCard
+            title="Proprietários Inativos"
+            value={metrics.inactive_owner_count}
+            subtitle="Sem resposta há 3+ meses"
+            icon={Users}
+            iconColor="text-orange-600"
+          />
+          <MetricsCard
+            title="Taxa de Sucesso"
+            value={`${metrics.success_rate.toFixed(1)}%`}
+            subtitle={`${metrics.failed_count} falharam`}
+            icon={MessageCircle}
+            iconColor="text-purple-600"
+          />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
