@@ -25,7 +25,7 @@ export interface Lead {
   broker_id?: string;
 
   // Contact info
-  name: string;
+  name?: string;
   email?: string;
   phone?: string;
 
@@ -34,10 +34,22 @@ export interface Lead {
   channel: LeadChannel;
   status?: LeadStatus;
 
+  // PROMPT 07: Tracking (UTM parameters)
+  utm_source?: string;
+  utm_campaign?: string;
+  utm_medium?: string;
+  referrer?: string;
+
   // LGPD
-  consent_given?: boolean;
+  consent_given: boolean;
   consent_text?: string;
   consent_date?: Date | string;
+  consent_ip?: string;
+  consent_revoked?: boolean;
+  revoked_at?: Date | string;
+  is_anonymized?: boolean;
+  anonymized_at?: Date | string;
+  anonymization_reason?: string;
 
   // Timestamps
   created_at?: Date | string;

@@ -35,6 +35,16 @@ func (h *LeadHandler) RegisterRoutes(router *gin.RouterGroup) {
 		leads.POST("/:id/revoke-consent", h.RevokeConsent)
 		leads.POST("/:id/anonymize", h.AnonymizeLead)
 	}
+
+	// PROMPT 07: Public endpoints for WhatsApp and Form leads
+	// These routes should be registered under /properties/:property_id
+	// Call this from property_handler or main.go routing
+}
+
+// RegisterPropertyLeadRoutes registers lead routes under property scope
+func (h *LeadHandler) RegisterPropertyLeadRoutes(router *gin.RouterGroup) {
+	router.POST("/properties/:property_id/leads/whatsapp", h.CreateWhatsAppLead)
+	router.POST("/properties/:property_id/leads/form", h.CreateFormLead)
 }
 
 // CreateLead creates a new lead
@@ -252,6 +262,10 @@ func (h *LeadHandler) ListLeads(c *gin.Context) {
 	})
 }
 
+// AssignToBrokerRequest represents the request body for assigning a lead to a broker
+type AssignToBrokerRequest struct {
+	BrokerID string `json:"broker_id" binding:"required"`
+}
 
 // UpdateStatus updates the status of a lead
 // @Summary Update lead status
@@ -299,11 +313,6 @@ func (h *LeadHandler) UpdateStatus(c *gin.Context) {
 		"success": true,
 		"data":    gin.H{"message": "lead status updated successfully"},
 	})
-}
-
-// AssignToBrokerRequest represents the request body for assigning a lead to a broker
-type AssignToBrokerRequest struct {
-	BrokerID string `json:"broker_id" binding:"required"`
 }
 
 // AssignToBroker assigns a lead to a specific broker
@@ -443,3 +452,170 @@ func (h *LeadHandler) AnonymizeLead(c *gin.Context) {
 	})
 }
 
+// ============================================================================
+// PROMPT 07: WhatsApp Flow (Gestão de Leads)
+// ============================================================================
+
+// CreateWhatsAppLeadRequest represents the request body for creating a WhatsApp lead
+type CreateWhatsAppLeadRequest struct {
+	UTMSource   string `json:"utm_source,omitempty"`
+	UTMCampaign string `json:"utm_campaign,omitempty"`
+	UTMMedium   string `json:"utm_medium,omitempty"`
+	Referrer    string `json:"referrer,omitempty"`
+}
+
+// CreateFormLeadRequest represents the request body for creating a form lead
+type CreateFormLeadRequest struct {
+	Name         string `json:"name" binding:"required"`
+	Email        string `json:"email"`
+	Phone        string `json:"phone"`
+	Message      string `json:"message,omitempty"`
+	ConsentGiven bool   `json:"consent_given" binding:"required"`
+	ConsentText  string `json:"consent_text" binding:"required"`
+	UTMSource    string `json:"utm_source,omitempty"`
+	UTMCampaign  string `json:"utm_campaign,omitempty"`
+	UTMMedium    string `json:"utm_medium,omitempty"`
+	Referrer     string `json:"referrer,omitempty"`
+}
+
+// CreateWhatsAppLead creates a new lead from WhatsApp button click
+// @Summary Create WhatsApp lead
+// @Description Create a new lead when user clicks WhatsApp button (PROMPT 07)
+// @Tags leads
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param property_id path string true "Property ID"
+// @Param lead body CreateWhatsAppLeadRequest true "WhatsApp lead data"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/{tenant_id}/properties/{property_id}/leads/whatsapp [post]
+func (h *LeadHandler) CreateWhatsAppLead(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	propertyID := c.Param("property_id")
+
+	var req CreateWhatsAppLeadRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Get client IP for LGPD consent tracking
+	clientIP := c.ClientIP()
+
+	// Create lead with WhatsApp channel
+	lead := &models.Lead{
+		TenantID:     tenantID,
+		PropertyID:   propertyID,
+		Channel:      models.LeadChannelWhatsApp,
+		ConsentGiven: true, // Implícito ao clicar no botão WhatsApp
+		ConsentText:  "Concordo com a Política de Privacidade e autorizo o uso dos meus dados para contato sobre este imóvel.",
+		ConsentIP:    clientIP,
+		UTMSource:    req.UTMSource,
+		UTMCampaign:  req.UTMCampaign,
+		UTMMedium:    req.UTMMedium,
+		Referrer:     req.Referrer,
+	}
+
+	// Create lead (validates property exists)
+	if err := h.leadService.CreateLead(c.Request.Context(), lead); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Generate WhatsApp URL and message
+	whatsappData, err := h.leadService.GenerateWhatsAppURL(c.Request.Context(), tenantID, propertyID, lead.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success":      true,
+		"lead_id":      lead.ID,
+		"whatsapp_url": whatsappData.URL,
+		"message":      whatsappData.Message,
+	})
+}
+
+// CreateFormLead creates a new lead from contact form
+// @Summary Create form lead
+// @Description Create a new lead when user submits contact form (PROMPT 07)
+// @Tags leads
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param property_id path string true "Property ID"
+// @Param lead body CreateFormLeadRequest true "Form lead data"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} map[string]interface{}
+// @Failure 500 {object} map[string]interface{}
+// @Router /api/v1/{tenant_id}/properties/{property_id}/leads/form [post]
+func (h *LeadHandler) CreateFormLead(c *gin.Context) {
+	tenantID := c.Param("tenant_id")
+	propertyID := c.Param("property_id")
+
+	var req CreateFormLeadRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// LGPD validation: consent is mandatory
+	if !req.ConsentGiven {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "consent_given must be true (LGPD compliance)",
+		})
+		return
+	}
+
+	// Get client IP for LGPD consent tracking
+	clientIP := c.ClientIP()
+
+	// Create lead with form channel
+	lead := &models.Lead{
+		TenantID:     tenantID,
+		PropertyID:   propertyID,
+		Name:         req.Name,
+		Email:        req.Email,
+		Phone:        req.Phone,
+		Message:      req.Message,
+		Channel:      models.LeadChannelForm,
+		ConsentGiven: req.ConsentGiven,
+		ConsentText:  req.ConsentText,
+		ConsentIP:    clientIP,
+		UTMSource:    req.UTMSource,
+		UTMCampaign:  req.UTMCampaign,
+		UTMMedium:    req.UTMMedium,
+		Referrer:     req.Referrer,
+	}
+
+	// Create lead (validates property exists and contact methods)
+	if err := h.leadService.CreateLead(c.Request.Context(), lead); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"lead_id": lead.ID,
+		"message": "Lead criado com sucesso. O corretor entrará em contato em breve.",
+	})
+}

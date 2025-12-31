@@ -68,17 +68,21 @@ export function ContactForm({
     setSubmitSuccess(false);
 
     try {
-      const leadData: CreateLeadRequest = {
-        property_id: propertyId,
+      // PROMPT 07: Use new LGPD-compliant form endpoint
+      const consentText = 'Autorizo o uso dos meus dados pessoais para contato sobre este imóvel, conforme a Lei Geral de Proteção de Dados (LGPD).';
+
+      await api.createFormLead(propertyId, {
         name: data.name,
         email: data.email || undefined,
         phone: data.phone,
         message: data.message || undefined,
-        channel,
-        consent_text: 'Autorizo o uso dos meus dados para contato conforme a LGPD.',
-      };
-
-      await api.createLead(leadData);
+        consent_given: true, // Required by LGPD
+        consent_text: consentText,
+        utm_source: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+        utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+        utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+        referrer: document.referrer || window.location.href,
+      });
 
       setSubmitSuccess(true);
       reset();

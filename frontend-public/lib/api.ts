@@ -112,6 +112,48 @@ class ApiClient {
     return response.data;
   }
 
+  // PROMPT 07: WhatsApp Flow
+  async createWhatsAppLead(propertyId: string, data?: {
+    utm_source?: string;
+    utm_campaign?: string;
+    utm_medium?: string;
+    referrer?: string;
+  }): Promise<{
+    success: boolean;
+    lead_id: string;
+    whatsapp_url: string;
+    message: string;
+  }> {
+    const response = await this.client.post(
+      `/v1/${this.tenantId}/properties/${propertyId}/leads/whatsapp`,
+      data || {}
+    );
+    return response.data;
+  }
+
+  async createFormLead(propertyId: string, data: {
+    name: string;
+    email?: string;
+    phone?: string;
+    message?: string;
+    consent_given: boolean;
+    consent_text: string;
+    utm_source?: string;
+    utm_campaign?: string;
+    utm_medium?: string;
+    referrer?: string;
+  }): Promise<{
+    success: boolean;
+    lead_id: string;
+    message: string;
+  }> {
+    const response = await this.client.post(
+      `/v1/${this.tenantId}/properties/${propertyId}/leads/form`,
+      data
+    );
+    return response.data;
+  }
+
   // Search helpers
   async searchProperties(query: string, filters?: PropertyFilters): Promise<Property[]> {
     const searchFilters = {

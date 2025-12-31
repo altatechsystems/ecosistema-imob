@@ -355,8 +355,11 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 		public.GET("/brokers/:id/public", handlers.BrokerHandler.GetBrokerPublicProfile)
 		public.GET("/brokers/:id/properties", handlers.BrokerHandler.GetBrokerProperties)
 
-		// Public lead creation (extra strict - prevent spam)
+		// PROMPT 07: WhatsApp Flow - Public lead creation endpoints
+		// Extra strict rate limiting to prevent spam
 		public.POST("/leads", handlers.LeadHandler.CreateLead)
+		public.POST("/properties/:property_id/leads/whatsapp", handlers.LeadHandler.CreateWhatsAppLead)
+		public.POST("/properties/:property_id/leads/form", handlers.LeadHandler.CreateFormLead)
 
 		// Public images
 		public.GET("/property-images/:property_id", handlers.StorageHandler.ListImages)
@@ -377,6 +380,7 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 			handlers.OwnerHandler.RegisterRoutes(tenantScoped)
 			handlers.ListingHandler.RegisterRoutes(tenantScoped)
 			handlers.PropertyBrokerRoleHandler.RegisterRoutes(tenantScoped)
+			handlers.LeadHandler.RegisterRoutes(tenantScoped)
 			handlers.ActivityLogHandler.RegisterRoutes(tenantScoped)
 			if handlers.StorageHandler != nil {
 				handlers.StorageHandler.RegisterRoutes(tenantScoped)

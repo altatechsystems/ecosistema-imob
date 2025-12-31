@@ -80,26 +80,18 @@ export default function PropertyDetailsPage() {
     try {
       setIsCreatingLead(true);
 
-      // 1. Criar Lead PRIMEIRO (conforme AI_DEV_DIRECTIVE Section 8)
-      const leadResponse = await api.createLead({
-        property_id: property.id!,
-        name: 'Lead via WhatsApp',
-        phone: '',
-        channel: LeadChannel.WHATSAPP,
-        consent_given: true,
-        consent_text: 'Consentimento implícito ao clicar em "Falar no WhatsApp"',
-        consent_date: new Date().toISOString(),
+      // PROMPT 07: Criar Lead WhatsApp e obter URL gerada pelo backend
+      const response = await api.createWhatsAppLead(property.id!, {
+        utm_source: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+        utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+        utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+        referrer: document.referrer || window.location.href,
       });
 
-      // 2. Construir mensagem com Lead ID
-      const reference = property.reference || property.title || `${getPropertyTypeLabel(property.property_type)} - ${property.city}`;
-      const message = `Olá! Tenho interesse no imóvel ${reference}.\n\nLead ID: #${leadResponse.data.id}`;
-      const whatsappUrl = buildWhatsAppUrl(process.env.NEXT_PUBLIC_WHATSAPP || '', message);
-
-      // 3. Redirecionar para WhatsApp
-      window.open(whatsappUrl, '_blank');
+      // Redirecionar para WhatsApp com URL e mensagem gerados pelo backend
+      window.open(response.whatsapp_url, '_blank');
     } catch (error) {
-      console.error('Erro ao criar lead:', error);
+      console.error('Erro ao criar lead WhatsApp:', error);
       // Fallback: abrir WhatsApp mesmo sem Lead (não ideal)
       const message = `Olá! Tenho interesse no imóvel: ${property.title || getPropertyTypeLabel(property.property_type)} - ${property.city}`;
       const whatsappUrl = buildWhatsAppUrl(process.env.NEXT_PUBLIC_WHATSAPP || '', message);
