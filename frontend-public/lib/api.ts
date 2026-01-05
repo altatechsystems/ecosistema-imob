@@ -71,6 +71,7 @@ class ApiClient {
     // Add pagination
     if (pagination) {
       if (pagination.limit) params.append('limit', String(pagination.limit));
+      if (pagination.offset !== undefined) params.append('offset', String(pagination.offset));
       if (pagination.order_by) params.append('order_by', pagination.order_by);
       if (pagination.order_direction) params.append('order_direction', pagination.order_direction);
       if (pagination.start_after) params.append('start_after', pagination.start_after);

@@ -14,26 +14,53 @@ import { BreadcrumbStructuredData } from '@/components/seo/breadcrumb-structured
 
 export default function PropertiesPage() {
   const [properties, setProperties] = React.useState<Property[]>([]);
+  const [totalCount, setTotalCount] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
+  const [currentPage, setCurrentPage] = React.useState(0);
+  const [hasMoreToFetch, setHasMoreToFetch] = React.useState(true);
   const [filters, setFilters] = React.useState<PropertyFilters>({
     // Removed default filters to avoid Firestore composite index requirement
     // status: PropertyStatus.AVAILABLE,
     // visibility: PropertyVisibility.PUBLIC,
   });
 
-  const loadProperties = React.useCallback(async () => {
+  const pageSize = 200; // Fetch 200 properties per API call
+
+  const loadProperties = React.useCallback(async (page: number = 0, append: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (page === 0) {
+        setIsLoading(true);
+        setProperties([]);
+        setCurrentPage(0);
+        setHasMoreToFetch(true);
+      } else {
+        setLoadingMore(true);
+      }
+
       const startTime = performance.now();
 
-      const result = await api.getProperties(filters, { limit: 50 });
+      const result = await api.getProperties(filters, { limit: pageSize, offset: page * pageSize });
 
       const loadTime = performance.now() - startTime;
-      console.log(`✅ Loaded ${result.data?.length || 0} properties in ${loadTime.toFixed(0)}ms`);
+      console.log(`✅ Loaded ${result.data?.length || 0} properties (page ${page + 1}) in ${loadTime.toFixed(0)}ms. Total: ${result.total || 'unknown'}`);
+
+      // Store total count from API (only on first page)
+      if (page === 0 && result.total) {
+        setTotalCount(result.total);
+      }
 
       // Use properties directly from API
-      setProperties(result.data || []);
+      if (append) {
+        setProperties(prev => [...prev, ...(result.data || [])]);
+      } else {
+        setProperties(result.data || []);
+      }
+
+      // Check if there are more properties to fetch
+      setHasMoreToFetch((result.data || []).length === pageSize);
+      setCurrentPage(page);
 
       const processingTime = performance.now() - startTime;
       console.log(`⚡ Total processing time: ${processingTime.toFixed(0)}ms`);
@@ -41,12 +68,23 @@ export default function PropertiesPage() {
       console.error('Failed to load properties:', error);
     } finally {
       setIsLoading(false);
+      setLoadingMore(false);
     }
-  }, [filters]);
+  }, [filters, pageSize]);
 
   React.useEffect(() => {
-    loadProperties();
-  }, [loadProperties]);
+    loadProperties(0, false);
+  }, [filters]);
+
+  // Auto-fetch next pages in background
+  React.useEffect(() => {
+    if (!isLoading && !loadingMore && hasMoreToFetch && properties.length > 0) {
+      const timer = setTimeout(() => {
+        loadProperties(currentPage + 1, true);
+      }, 500); // Wait 500ms before fetching next page
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, loadingMore, hasMoreToFetch, properties.length, currentPage, loadProperties]);
 
   const handleClearFilters = () => {
     setFilters({
@@ -115,7 +153,13 @@ export default function PropertiesPage() {
                   Imóveis Disponíveis
                 </h1>
                 <p className="text-sm sm:text-base text-gray-600">
-                  {isLoading ? 'Carregando...' : `${properties.length} imóveis encontrados`}
+                  {isLoading ? 'Carregando...' : (
+                    <>
+                      {totalCount > 0 ? totalCount : properties.length} imóveis encontrados
+                      {loadingMore && ' (carregando mais...)'}
+                      {totalCount > properties.length && ` (${properties.length} carregados)`}
+                    </>
+                  )}
                 </p>
               </div>
 

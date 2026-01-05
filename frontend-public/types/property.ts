@@ -151,6 +151,7 @@ export interface PropertyFilters {
 
 export interface PaginationOptions {
   limit?: number;
+  offset?: number;
   order_by?: string;
   order_direction?: 'asc' | 'desc';
   start_after?: string;
@@ -160,6 +161,7 @@ export interface PropertyListResponse {
   success: boolean;
   data: Property[];
   count: number;
+  total?: number;
   has_more?: boolean;
 }
 
