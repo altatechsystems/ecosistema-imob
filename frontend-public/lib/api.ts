@@ -21,7 +21,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 10000,
+      timeout: 30000, // 30 seconds to handle large property lists
     });
 
     // Request interceptor
