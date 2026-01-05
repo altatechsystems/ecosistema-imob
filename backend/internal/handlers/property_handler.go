@@ -301,10 +301,18 @@ func (h *PropertyHandler) ListProperties(c *gin.Context) {
 		return
 	}
 
+	// Get total count (without pagination)
+	total, err := h.propertyService.CountProperties(c.Request.Context(), tenantID, filters)
+	if err != nil {
+		// Log error but don't fail the request - count is optional
+		total = len(properties)
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    properties,
 		"count":   len(properties),
+		"total":   total,
 	})
 }
 

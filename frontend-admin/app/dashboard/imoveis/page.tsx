@@ -32,16 +32,23 @@ export default function ImoveisPage() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [properties, setProperties] = useState<Property[]>([]);
+  const [totalCount, setTotalCount] = useState(0); // Total properties in database
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [displayCount, setDisplayCount] = useState(12);
   const [typeFilter, setTypeFilter] = useState<PropertyTypeFilter>('all');
+  const [hasMoreToFetch, setHasMoreToFetch] = useState(true);
+  const [currentPage, setCurrentPage] = useState(0);
   const observerTarget = useRef<HTMLDivElement>(null);
   const itemsPerPage = 12;
+  const pageSize = 200; // Fetch 200 properties per API call
 
-  const fetchProperties = useCallback(async () => {
+  const fetchProperties = useCallback(async (page: number = 0, append: boolean = false) => {
     try {
-      setLoading(true);
+      if (page === 0) setLoading(true);
+      else setLoadingMore(true);
+
       const tenantId = localStorage.getItem('tenant_id');
 
       if (!tenantId) {
@@ -50,7 +57,8 @@ export default function ImoveisPage() {
       }
 
       const startTime = performance.now();
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?limit=1000`;
+      const offset = page * pageSize;
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?limit=${pageSize}&offset=${offset}`;
 
       const response = await fetch(url);
 
@@ -60,7 +68,12 @@ export default function ImoveisPage() {
 
       const data = await response.json();
       const loadTime = performance.now() - startTime;
-      console.log(`✅ Loaded ${data.data?.length || 0} properties in ${loadTime.toFixed(0)}ms`);
+      console.log(`✅ Loaded ${data.data?.length || 0} properties (page ${page + 1}) in ${loadTime.toFixed(0)}ms. Total: ${data.total || 'unknown'}`);
+
+      // Store total count from API (only on first page)
+      if (page === 0 && data.total) {
+        setTotalCount(data.total);
+      }
 
       // Optimize: Only process essential fields
       const propertiesData = data.data || [];
@@ -85,18 +98,37 @@ export default function ImoveisPage() {
         image_url: property.cover_image_url,
       }));
 
-      setProperties(optimizedProperties);
+      if (append) {
+        setProperties(prev => [...prev, ...optimizedProperties]);
+      } else {
+        setProperties(optimizedProperties);
+      }
+
+      // Check if there are more properties to fetch
+      setHasMoreToFetch(optimizedProperties.length === pageSize);
+      setCurrentPage(page);
     } catch (err: any) {
       console.error('Erro ao buscar imóveis:', err);
       setError(err.message);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, []);
+  }, [pageSize]);
 
   useEffect(() => {
-    fetchProperties();
-  }, [fetchProperties]);
+    fetchProperties(0, false);
+  }, []);
+
+  // Auto-fetch next pages in background
+  useEffect(() => {
+    if (!loading && !loadingMore && hasMoreToFetch && properties.length > 0) {
+      const timer = setTimeout(() => {
+        fetchProperties(currentPage + 1, true);
+      }, 500); // Wait 500ms before fetching next page
+      return () => clearTimeout(timer);
+    }
+  }, [loading, loadingMore, hasMoreToFetch, properties.length, currentPage, fetchProperties]);
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -243,8 +275,17 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Total</p>
-              <p className="text-base sm:text-lg font-bold text-gray-900">{stats.total}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Total {loadingMore && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-gray-900">
+                {totalCount > 0 ? totalCount : stats.total}
+              </p>
+              {totalCount > properties.length && (
+                <p className="text-[9px] sm:text-[10px] text-gray-500">
+                  {properties.length} carregados
+                </p>
+              )}
             </div>
           </div>
         </button>
@@ -493,7 +534,6 @@ export default function ImoveisPage() {
                     sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     className="object-cover"
                     loading="lazy"
-                    quality={60}
                     placeholder="blur"
                     blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2RkZCIvPjwvc3ZnPg=="
                   />
@@ -576,16 +616,22 @@ export default function ImoveisPage() {
 
         {/* Infinite Scroll Trigger & Loading Indicator */}
         <div ref={observerTarget} className="py-8">
+          {loadingMore && (
+            <div className="text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <p className="text-gray-600 mt-2">Carregando mais imóveis em segundo plano...</p>
+            </div>
+          )}
           {hasMore && (
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="text-gray-600 mt-2">Carregando mais imóveis...</p>
             </div>
           )}
-          {!hasMore && filteredProperties.length > 12 && (
+          {!hasMore && !loadingMore && filteredProperties.length > 12 && (
             <div className="text-center">
               <p className="text-gray-600">
-                Mostrando todos os {filteredProperties.length} imóveis
+                Mostrando todos os {filteredProperties.length} imóveis ({properties.length} carregados)
               </p>
             </div>
           )}

@@ -295,6 +295,49 @@ func (r *PropertyRepository) List(ctx context.Context, tenantID string, filters 
 	return properties, nil
 }
 
+// Count returns the total number of properties for a tenant with optional filters
+func (r *PropertyRepository) Count(ctx context.Context, tenantID string, filters *PropertyFilters) (int, error) {
+	if tenantID == "" {
+		return 0, fmt.Errorf("%w: tenant_id is required", ErrInvalidInput)
+	}
+
+	collectionPath := r.getPropertiesCollection(tenantID)
+	query := r.Client().Collection(collectionPath).Where("tenant_id", "==", tenantID)
+
+	// Apply filters if provided
+	if filters != nil {
+		if filters.Status != nil {
+			query = query.Where("status", "==", string(*filters.Status))
+		}
+		if filters.PropertyType != nil {
+			query = query.Where("property_type", "==", string(*filters.PropertyType))
+		}
+		if filters.TransactionType != nil {
+			query = query.Where("transaction_type", "==", string(*filters.TransactionType))
+		}
+		if filters.Visibility != nil {
+			query = query.Where("visibility", "==", string(*filters.Visibility))
+		}
+		if filters.City != "" {
+			query = query.Where("city", "==", filters.City)
+		}
+		if filters.Neighborhood != "" {
+			query = query.Where("neighborhood", "==", filters.Neighborhood)
+		}
+		if filters.OwnerID != "" {
+			query = query.Where("owner_id", "==", filters.OwnerID)
+		}
+	}
+
+	// Use Select() to only fetch document IDs for counting (more efficient)
+	docs, err := query.Select().Documents(ctx).GetAll()
+	if err != nil {
+		return 0, fmt.Errorf("failed to count properties: %w", err)
+	}
+
+	return len(docs), nil
+}
+
 // ListByOwner retrieves all properties for an owner
 func (r *PropertyRepository) ListByOwner(ctx context.Context, tenantID, ownerID string, opts PaginationOptions) ([]*models.Property, error) {
 	if tenantID == "" {

@@ -47,16 +47,46 @@ export default function DashboardPage() {
         return;
       }
 
-      // Buscar imóveis (com limit alto para pegar todos)
-      const propertiesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?limit=10000`);
+      // Buscar total de imóveis (usando o novo campo total da API)
+      const propertiesResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?limit=1`);
+      if (!propertiesResponse.ok) {
+        throw new Error(`Failed to fetch properties: ${propertiesResponse.status}`);
+      }
       const propertiesData = await propertiesResponse.json();
-      const properties = propertiesData.data || [];
+      const totalProperties = propertiesData.total || 0;
 
-      // Calcular métricas
-      const totalProperties = properties.length;
-      const availableProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'available').length;
-      const soldProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'sold').length;
-      const rentedProperties = properties.filter((p: any) => p.status?.toLowerCase() === 'rented').length;
+      // Delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Buscar imóveis disponíveis
+      const availableResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?status=available&limit=1`);
+      if (!availableResponse.ok) {
+        throw new Error(`Failed to fetch available properties: ${availableResponse.status}`);
+      }
+      const availableData = await availableResponse.json();
+      const availableProperties = availableData.total || 0;
+
+      // Delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Buscar imóveis vendidos
+      const soldResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?status=sold&limit=1`);
+      if (!soldResponse.ok) {
+        throw new Error(`Failed to fetch sold properties: ${soldResponse.status}`);
+      }
+      const soldData = await soldResponse.json();
+      const soldProperties = soldData.total || 0;
+
+      // Delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Buscar imóveis alugados
+      const rentedResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/${tenantId}/properties?status=rented&limit=1`);
+      if (!rentedResponse.ok) {
+        throw new Error(`Failed to fetch rented properties: ${rentedResponse.status}`);
+      }
+      const rentedData = await rentedResponse.json();
+      const rentedProperties = rentedData.total || 0;
 
       setMetrics({
         total_properties: totalProperties,

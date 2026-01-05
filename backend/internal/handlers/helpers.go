@@ -18,6 +18,12 @@ func parsePaginationOptions(c *gin.Context) repositories.PaginationOptions {
 		}
 	}
 
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
+			opts.Offset = offset
+		}
+	}
+
 	if orderBy := c.Query("order_by"); orderBy != "" {
 		opts.OrderBy = orderBy
 	}

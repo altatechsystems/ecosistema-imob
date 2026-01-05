@@ -42,6 +42,7 @@ func (r *BaseRepository) Client() *firestore.Client {
 // PaginationOptions contains options for pagination
 type PaginationOptions struct {
 	Limit      int
+	Offset     int         // Offset for pagination (alternative to cursor-based)
 	StartAfter interface{} // Cursor for pagination
 	OrderBy    string
 	Direction  firestore.Direction
@@ -201,6 +202,11 @@ func (r *BaseRepository) ApplyPagination(query firestore.Query, opts PaginationO
 
 	if opts.StartAfter != nil {
 		query = query.StartAfter(opts.StartAfter)
+	}
+
+	// Support offset-based pagination
+	if opts.Offset > 0 {
+		query = query.Offset(opts.Offset)
 	}
 
 	if opts.Limit > 0 {

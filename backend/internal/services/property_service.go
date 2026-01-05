@@ -417,6 +417,20 @@ func (s *PropertyService) ListProperties(ctx context.Context, tenantID string, f
 	return properties, nil
 }
 
+// CountProperties returns the total number of properties for a tenant with optional filters
+func (s *PropertyService) CountProperties(ctx context.Context, tenantID string, filters *repositories.PropertyFilters) (int, error) {
+	if tenantID == "" {
+		return 0, fmt.Errorf("tenant_id is required")
+	}
+
+	count, err := s.propertyRepo.Count(ctx, tenantID, filters)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count properties: %w", err)
+	}
+
+	return count, nil
+}
+
 // SearchProperties searches properties by location
 func (s *PropertyService) SearchProperties(ctx context.Context, tenantID, city, neighborhood string, opts repositories.PaginationOptions) ([]*models.Property, error) {
 	if tenantID == "" {
