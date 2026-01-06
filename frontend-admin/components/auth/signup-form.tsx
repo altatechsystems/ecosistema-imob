@@ -27,6 +27,8 @@ export function SignupForm({
     phone: '',
     password: '',
     confirmPassword: '',
+    is_broker: false,
+    creci: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -54,6 +56,13 @@ export function SignupForm({
         return;
       }
 
+      // Validate CRECI if is_broker is checked
+      if (formData.is_broker && !formData.creci.trim()) {
+        setError('CRECI é obrigatório para corretores');
+        setLoading(false);
+        return;
+      }
+
       // Validate with Zod
       const validatedData = signupSchema.parse({
         name: formData.name,
@@ -62,10 +71,15 @@ export function SignupForm({
         phone: formData.phone,
         tenant_name: formData.tenant_name,
       });
+
       // 1. Criar tenant e usuário no backend
       const signupResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/signup`,
-        validatedData
+        {
+          ...validatedData,
+          is_broker: formData.is_broker,
+          creci: formData.is_broker ? formData.creci : undefined,
+        }
       );
 
       const data = signupResponse.data;
@@ -211,8 +225,54 @@ export function SignupForm({
             </p>
           </div>
 
+          {/* PROMPT 10: Ask if user is a broker */}
+          <div className="border-t border-gray-200 pt-4 mt-6">
+            <div className="mb-4">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  id="is_broker"
+                  name="is_broker"
+                  type="checkbox"
+                  checked={formData.is_broker}
+                  onChange={(e) => setFormData({ ...formData, is_broker: e.target.checked, creci: '' })}
+                  disabled={loading}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Sou corretor de imóveis (CRECI)
+                </span>
+              </label>
+              <p className="mt-1 ml-7 text-xs text-gray-500">
+                Marque esta opção se você possui registro no CRECI (Conselho Regional de Corretores de Imóveis)
+              </p>
+            </div>
+
+            {/* CRECI - Only show if is_broker is checked */}
+            {formData.is_broker && (
+              <div className="animate-fadeIn">
+                <label htmlFor="creci" className="block text-sm font-medium text-gray-700 mb-1">
+                  CRECI * <span className="text-xs text-gray-500">(Obrigatório para corretores)</span>
+                </label>
+                <input
+                  id="creci"
+                  name="creci"
+                  type="text"
+                  required={formData.is_broker}
+                  value={formData.creci}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Ex: 12345-F/SP ou 67890-J/RJ"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Formato: XXXXX-F/UF (Pessoa Física) ou XXXXX-J/UF (Pessoa Jurídica)
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Senha */}
-          <div>
+          <div className="mt-6">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Senha *
             </label>

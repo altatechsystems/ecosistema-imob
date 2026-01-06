@@ -34,6 +34,10 @@ type SignupRequest struct {
 	Name       string `json:"name" binding:"required"`
 	Phone      string `json:"phone" binding:"required"`
 	TenantName string `json:"tenant_name" binding:"required"`
+
+	// PROMPT 10: Differentiate between brokers and administrative users
+	IsBroker bool   `json:"is_broker"` // true = create as broker, false = create as admin user
+	CRECI    string `json:"creci"`     // Required if is_broker=true
 }
 
 // SignupResponse represents the signup response
@@ -113,36 +117,100 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	// 4. Create Broker (admin role)
-	brokerID := uuid.New().String()
-	broker := models.Broker{
-		ID:          brokerID,
-		TenantID:    tenantID,
-		FirebaseUID: userRecord.UID,
-		Name:        req.Name,
-		Email:       req.Email,
-		Phone:       req.Phone,
-		Role:        "admin", // First user is always admin
-		IsActive:    true,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-	}
+	// 4. PROMPT 10: Create either Broker or User based on is_broker flag
+	var entityID string
+	var role string
 
-	_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("brokers").Doc(brokerID).Set(ctx, broker)
-	if err != nil {
-		log.Printf("Error creating broker: %v", err)
-		// Rollback: delete tenant and Firebase user
-		h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
-		h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create broker"})
-		return
+	if req.IsBroker {
+		// Create as Broker (requires CRECI)
+		if req.CRECI == "" {
+			log.Printf("CRECI is required for broker signup")
+			// Rollback: delete tenant and Firebase user
+			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI is required for brokers"})
+			return
+		}
+
+		brokerID := uuid.New().String()
+		broker := models.Broker{
+			ID:          brokerID,
+			TenantID:    tenantID,
+			FirebaseUID: userRecord.UID,
+			Name:        req.Name,
+			Email:       req.Email,
+			Phone:       req.Phone,
+			CRECI:       req.CRECI,
+			Role:        "broker_admin", // First broker is broker_admin
+			IsActive:    true,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+
+		_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("brokers").Doc(brokerID).Set(ctx, broker)
+		if err != nil {
+			log.Printf("Error creating broker: %v", err)
+			// Rollback: delete tenant and Firebase user
+			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create broker"})
+			return
+		}
+
+		entityID = brokerID
+		role = "broker_admin"
+		log.Printf("✅ Created broker with CRECI: %s", req.CRECI)
+	} else {
+		// Create as User (administrative user without CRECI)
+		userID := uuid.New().String()
+		user := models.User{
+			ID:          userID,
+			TenantID:    tenantID,
+			FirebaseUID: userRecord.UID,
+			Name:        req.Name,
+			Email:       req.Email,
+			Phone:       req.Phone,
+			Role:        "admin", // First user is always admin
+			IsActive:    true,
+			Permissions: []string{
+				"properties.view_all",
+				"properties.create",
+				"properties.edit_all",
+				"properties.delete",
+				"brokers.view",
+				"brokers.create",
+				"brokers.edit",
+				"users.view",
+				"users.create",
+				"users.edit",
+				"settings.view",
+				"settings.edit",
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("users").Doc(userID).Set(ctx, user)
+		if err != nil {
+			log.Printf("Error creating user: %v", err)
+			// Rollback: delete tenant and Firebase user
+			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+			return
+		}
+
+		entityID = userID
+		role = "admin"
+		log.Printf("✅ Created administrative user (no CRECI)")
 	}
 
 	// 5. Set custom claims
 	claims := map[string]interface{}{
 		"tenant_id": tenantID,
-		"role":      "admin",
-		"broker_id": brokerID,
+		"role":      role,
+		"broker_id": entityID, // For backwards compatibility
+		"user_id":   entityID, // For users
 	}
 
 	err = h.firebaseAuth.SetCustomUserClaims(ctx, userRecord.UID, claims)
@@ -164,23 +232,34 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		"tenant_id":   tenantID,
 		"tenant_name": req.TenantName,
 		"admin_email": req.Email,
+		"is_broker":   req.IsBroker,
 	})
 
-	go h.logActivity(ctx, tenantID, "broker_created", map[string]interface{}{
-		"broker_id":    brokerID,
-		"broker_email": req.Email,
-		"role":         "admin",
-	})
+	if req.IsBroker {
+		go h.logActivity(ctx, tenantID, "broker_created", map[string]interface{}{
+			"broker_id":    entityID,
+			"broker_email": req.Email,
+			"role":         role,
+			"creci":        req.CRECI,
+		})
+	} else {
+		go h.logActivity(ctx, tenantID, "user_created", map[string]interface{}{
+			"user_id":    entityID,
+			"user_email": req.Email,
+			"role":       role,
+		})
+	}
 
 	// 8. Return response
 	c.JSON(http.StatusCreated, SignupResponse{
 		TenantID:      tenantID,
-		BrokerID:      brokerID,
+		BrokerID:      entityID, // For backwards compatibility, this contains either broker_id or user_id
 		FirebaseToken: token,
 		User: map[string]interface{}{
 			"uid":   userRecord.UID,
 			"email": req.Email,
 			"name":  req.Name,
+			"role":  role,
 		},
 	})
 }
@@ -202,42 +281,92 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 2. Find broker by Firebase UID
+	// 2. Try to find in /brokers collection first (real estate agents with CRECI)
 	log.Printf("Looking for broker with firebase_uid: %s", userRecord.UID)
 	brokersQuery := h.firestoreDB.CollectionGroup("brokers").
 		Where("firebase_uid", "==", userRecord.UID).
 		Limit(1)
 
-	docs, err := brokersQuery.Documents(ctx).GetAll()
+	brokerDocs, err := brokersQuery.Documents(ctx).GetAll()
 	if err != nil {
 		log.Printf("Error querying brokers: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query brokers"})
 		return
 	}
 
-	if len(docs) == 0 {
-		log.Printf("No broker found for firebase_uid: %s (email: %s)", userRecord.UID, userRecord.Email)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Broker not found"})
+	// 3. If not found in /brokers, try /users collection (administrative users without CRECI)
+	var tenantID string
+	var role string
+	var entityID string
+	var entityName string
+	var entityEmail string
+	var isActive bool
+
+	if len(brokerDocs) > 0 {
+		// Found as Broker
+		brokerDoc := brokerDocs[0]
+		var broker models.Broker
+		if err := brokerDoc.DataTo(&broker); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load broker data"})
+			return
+		}
+		broker.ID = brokerDoc.Ref.ID
+
+		tenantID = broker.TenantID
+		role = broker.Role
+		entityID = broker.ID
+		entityName = broker.Name
+		entityEmail = broker.Email
+		isActive = broker.IsActive
+
+		log.Printf("✅ Found as Broker: %s (tenant: %s, role: %s)", broker.ID, broker.TenantID, broker.Role)
+	} else {
+		// Not found in brokers, search in users
+		log.Printf("Not found in brokers, searching in users...")
+		usersQuery := h.firestoreDB.CollectionGroup("users").
+			Where("firebase_uid", "==", userRecord.UID).
+			Limit(1)
+
+		userDocs, err := usersQuery.Documents(ctx).GetAll()
+		if err != nil {
+			log.Printf("Error querying users: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to query users"})
+			return
+		}
+
+		if len(userDocs) == 0 {
+			log.Printf("❌ User not found in brokers or users for firebase_uid: %s (email: %s)", userRecord.UID, userRecord.Email)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found. Please contact your administrator."})
+			return
+		}
+
+		// Found as User
+		userDoc := userDocs[0]
+		var user models.User
+		if err := userDoc.DataTo(&user); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load user data"})
+			return
+		}
+		user.ID = userDoc.Ref.ID
+
+		tenantID = user.TenantID
+		role = user.Role
+		entityID = user.ID
+		entityName = user.Name
+		entityEmail = user.Email
+		isActive = user.IsActive
+
+		log.Printf("✅ Found as User: %s (tenant: %s, role: %s)", user.ID, user.TenantID, user.Role)
+	}
+
+	// 4. Check if account is active
+	if !isActive {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Account is inactive"})
 		return
 	}
 
-	brokerDoc := docs[0]
-	var broker models.Broker
-	if err := brokerDoc.DataTo(&broker); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load broker data"})
-		return
-	}
-
-	broker.ID = brokerDoc.Ref.ID
-
-	// 3. Check if broker is active
-	if !broker.IsActive {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Broker account is inactive"})
-		return
-	}
-
-	// 4. Check if tenant is active
-	tenantDoc, err := h.firestoreDB.Collection("tenants").Doc(broker.TenantID).Get(ctx)
+	// 5. Check if tenant is active
+	tenantDoc, err := h.firestoreDB.Collection("tenants").Doc(tenantID).Get(ctx)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load tenant data"})
 		return
@@ -254,11 +383,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// 5. Generate custom token with claims
+	// 6. Generate custom token with claims
+	// Note: We use "broker_id" claim for both brokers and users for backwards compatibility
+	// This will be renamed to "entity_id" in a future version
 	claims := map[string]interface{}{
-		"tenant_id": broker.TenantID,
-		"broker_id": broker.ID,
-		"role":      broker.Role,
+		"tenant_id": tenantID,
+		"broker_id": entityID, // For backwards compatibility
+		"user_id":   entityID, // New field for users
+		"role":      role,
 	}
 
 	token, err := h.firebaseAuth.CustomTokenWithClaims(ctx, userRecord.UID, claims)
@@ -268,19 +400,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Custom token generated successfully for broker %s (tenant: %s)", broker.ID, broker.TenantID)
+	log.Printf("✅ Custom token generated successfully for %s (tenant: %s, role: %s)", entityID, tenantID, role)
 	log.Printf("   Token length: %d", len(token))
 
-	// 6. Return response
+	// 7. Return response
 	c.JSON(http.StatusOK, LoginResponse{
 		FirebaseToken:   token,
-		TenantID:        broker.TenantID,
+		TenantID:        tenantID,
 		IsPlatformAdmin: tenant.IsPlatformAdmin,
 		Broker: map[string]interface{}{
-			"id":    broker.ID,
-			"name":  broker.Name,
-			"email": broker.Email,
-			"role":  broker.Role,
+			"id":    entityID,
+			"name":  entityName,
+			"email": entityEmail,
+			"role":  role,
 		},
 	})
 }
