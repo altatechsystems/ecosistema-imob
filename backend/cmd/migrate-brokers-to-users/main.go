@@ -24,7 +24,7 @@ func main() {
 
 	credentialsPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credentialsPath == "" {
-		credentialsPath := "./config/firebase-adminsdk.json"
+		credentialsPath = "./config/firebase-adminsdk.json"
 	}
 
 	// Initialize Firestore
@@ -158,7 +158,8 @@ func main() {
 				fmt.Printf("      ✅ Created user with ID: %s\n", newUserRef.ID)
 
 				// Delete from brokers collection
-				if err := brokerDoc.Ref.Delete(ctx); err != nil {
+				_, err = brokerDoc.Ref.Delete(ctx)
+				if err != nil {
 					log.Printf("      ⚠️  Warning: Failed to delete broker (user was created): %v", err)
 				} else {
 					fmt.Printf("      ✅ Deleted from brokers collection\n")
