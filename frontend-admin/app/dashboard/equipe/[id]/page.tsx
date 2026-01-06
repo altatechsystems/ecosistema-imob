@@ -222,34 +222,34 @@ export default function EditUserPage() {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-6 md:py-8">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <button
           onClick={() => router.push('/dashboard/equipe')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 text-sm md:text-base"
         >
           <ArrowLeft className="w-4 h-4" />
           Voltar para Equipe
         </button>
-        <h1 className="text-3xl font-bold text-gray-900">Editar Usuário</h1>
-        <p className="text-gray-600 mt-1">
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">Editar Usuário</h1>
+        <p className="text-sm md:text-base text-gray-600 mt-1">
           Atualize as informações e permissões do usuário administrativo
         </p>
       </div>
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="mb-4 md:mb-6 bg-red-50 border border-red-200 text-red-700 px-3 md:px-4 py-3 rounded-lg text-sm md:text-base">
           {error}
         </div>
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
         {/* Basic Information Card */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
             Informações Básicas
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -303,8 +303,8 @@ export default function EditUserPage() {
         </div>
 
         {/* Role and Status Card */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-lg shadow p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
             Perfil e Status
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -356,11 +356,11 @@ export default function EditUserPage() {
 
         {/* Permissions Card - Only for Manager role */}
         {formData.role === 'manager' && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className="bg-white rounded-lg shadow p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-2">
               Permissões
             </h2>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-xs md:text-sm text-gray-600 mb-4">
               Selecione as permissões específicas para este gerente
             </p>
             <div className="space-y-6">
@@ -395,14 +395,14 @@ export default function EditUserPage() {
 
         {/* Admin Notice */}
         {formData.role === 'admin' && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4">
             <div className="flex items-start gap-3">
-              <Shield className="w-5 h-5 text-purple-600 mt-0.5" />
+              <Shield className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="font-semibold text-purple-900 mb-1">
+                <h3 className="text-sm md:text-base font-semibold text-purple-900 mb-1">
                   Administrador - Acesso Total
                 </h3>
-                <p className="text-sm text-purple-800">
+                <p className="text-xs md:text-sm text-purple-800">
                   Administradores têm acesso irrestrito a todas as funcionalidades do sistema.
                   Não é necessário configurar permissões individuais.
                 </p>
@@ -412,11 +412,11 @@ export default function EditUserPage() {
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-4 pt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4 pt-4 md:pt-6">
           <button
             type="button"
             onClick={() => router.push('/dashboard/equipe')}
-            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            className="w-full sm:w-auto px-6 py-2.5 sm:py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
             disabled={saving}
           >
             Cancelar
@@ -424,7 +424,7 @@ export default function EditUserPage() {
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
             {saving ? (
               <>
