@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const menuItems = [
+// Business operations - main workflow items
+const businessMenuItems = [
   {
     title: 'Dashboard',
     href: '/dashboard',
@@ -42,6 +43,20 @@ const menuItems = [
     icon: Users,
   },
   {
+    title: 'Confirmações',
+    href: '/dashboard/confirmacoes',
+    icon: Calendar,
+  },
+  {
+    title: 'Relatórios',
+    href: '/dashboard/relatorios',
+    icon: BarChart3,
+  },
+];
+
+// Administrative & configuration items
+const adminMenuItems = [
+  {
     title: 'Corretores',
     href: '/dashboard/corretores',
     icon: UserCog,
@@ -52,19 +67,9 @@ const menuItems = [
     icon: Shield,
   },
   {
-    title: 'Confirmações',
-    href: '/dashboard/confirmacoes',
-    icon: Calendar,
-  },
-  {
     title: 'Importação',
     href: '/dashboard/importacao',
     icon: Upload,
-  },
-  {
-    title: 'Relatórios',
-    href: '/dashboard/relatorios',
-    icon: BarChart3,
   },
   {
     title: 'Configurações',
@@ -140,32 +145,64 @@ export function AdminSidebar({ isOpen = true, onClose }: AdminSidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {menuItems.map((item) => {
-          // Check if this is the exact match or a sub-route
-          // Special case: Dashboard should only be active on exact match
-          const isActive = item.href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname === item.href || pathname.startsWith(item.href + '/');
-          const Icon = item.icon;
+      <nav className="flex-1 p-4 overflow-y-auto">
+        {/* Business Section */}
+        <div className="space-y-1 mb-6">
+          {businessMenuItems.map((item) => {
+            const isActive = item.href === '/dashboard'
+              ? pathname === '/dashboard'
+              : pathname === item.href || pathname.startsWith(item.href + '/');
+            const Icon = item.icon;
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={handleLinkClick}
-              className={cn(
-                'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
-                isActive
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              )}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="font-medium">{item.title}</span>
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={handleLinkClick}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="font-medium">{item.title}</span>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Divider */}
+        <div className="border-t border-gray-800 my-4"></div>
+
+        {/* Administration Section */}
+        <div className="space-y-1">
+          <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Administração
+          </div>
+          {adminMenuItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={handleLinkClick}
+                className={cn(
+                  'flex items-center gap-3 px-4 py-3 rounded-lg transition-colors',
+                  isActive
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="font-medium">{item.title}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
       {/* User / Logout */}
