@@ -17,8 +17,6 @@ export function AdminHeader({ onMenuClick }: AdminHeaderProps) {
     // Check if user is platform admin from localStorage
     // This will be set during login
     const platformAdminFlag = localStorage.getItem('is_platform_admin');
-    console.log('Platform Admin Flag from localStorage:', platformAdminFlag);
-    console.log('Is Platform Admin:', platformAdminFlag === 'true');
     setIsPlatformAdmin(platformAdminFlag === 'true');
   }, []);
 

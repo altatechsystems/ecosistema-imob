@@ -25,15 +25,10 @@ export default function LeadsPage() {
     try {
       setLoading(true);
 
-      const startTime = performance.now();
       const response = await adminApi.getLeads({}, { limit: 1000 });
-      const loadTime = performance.now() - startTime;
-
-      console.log(`✅ Loaded ${response.data?.length || 0} leads in ${loadTime.toFixed(0)}ms`);
 
       setLeads(response.data || []);
     } catch (err: any) {
-      console.error('Erro ao buscar leads:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -54,7 +49,6 @@ export default function LeadsPage() {
         )
       );
     } catch (err: any) {
-      console.error('Erro ao atualizar status do lead:', err);
       alert('Erro ao atualizar status do lead. Tente novamente.');
     } finally {
       setUpdatingLeadId(null);

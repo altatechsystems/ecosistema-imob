@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserRole, STANDARD_PERMISSIONS, getRoleDisplayName } from '@/types/user';
 import { ArrowLeft, Save, Shield, UserCog, UserPlus } from 'lucide-react';
+import { userSchema } from '@/lib/validations';
 
 export default function NewUserPage() {
   const router = useRouter();
@@ -25,20 +26,12 @@ export default function NewUserPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validação básica
-    if (!formData.name || !formData.email) {
-      setError('Nome e email são obrigatórios');
-      return;
-    }
-
-    if (!formData.firebase_uid) {
-      setError('Firebase UID é obrigatório. O usuário precisa ser criado no Firebase Authentication primeiro.');
-      return;
-    }
-
     try {
       setSaving(true);
       setError(null);
+
+      // Validate form data with Zod
+      const validatedData = userSchema.parse(formData);
 
       const tenantId = localStorage.getItem('tenant_id');
       if (!tenantId) {
@@ -62,7 +55,7 @@ export default function NewUserPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(validatedData),
       });
 
       if (!response.ok) {
@@ -73,8 +66,12 @@ export default function NewUserPage() {
       // Sucesso - redirecionar para lista
       router.push('/dashboard/equipe');
     } catch (err: any) {
-      console.error('Error creating user:', err);
-      setError(err.message || 'Erro ao criar usuário');
+      if (err.errors) {
+        // Zod validation error
+        setError(err.errors[0]?.message || 'Dados inválidos');
+      } else {
+        setError(err.message || 'Erro ao criar usuário');
+      }
     } finally {
       setSaving(false);
     }

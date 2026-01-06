@@ -136,9 +136,6 @@ export default function PropertyDetailPage() {
       }
 
       const data = await response.json();
-      console.log('Property details:', data);
-      console.log('Captador Name:', data.data?.captador_name);
-      console.log('Captador ID:', data.data?.captador_id);
 
       const propertyData = data.data;
       setProperty(propertyData);
@@ -158,7 +155,6 @@ export default function PropertyDetailPage() {
         fetchBrokerDetails(tenantId, propertyData.captador_id);
       }
     } catch (err: any) {
-      console.error('Erro ao buscar detalhes:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -173,7 +169,6 @@ export default function PropertyDetailPage() {
       const user = auth.currentUser;
 
       if (!user) {
-        console.error('Usuário não autenticado');
         return;
       }
 
@@ -209,7 +204,6 @@ export default function PropertyDetailPage() {
       const user = auth.currentUser;
 
       if (!user) {
-        console.error('Usuário não autenticado');
         return;
       }
 
@@ -250,7 +244,6 @@ export default function PropertyDetailPage() {
 
       // Refresh property data
       await fetchPropertyDetails();
-      alert('Status confirmado com sucesso!');
     } catch (err: any) {
       console.error('Erro ao confirmar status:', err);
       alert('Erro ao confirmar status. Tente novamente.');
@@ -298,7 +291,6 @@ export default function PropertyDetailPage() {
       });
 
       setConfirmationLink(response.confirmation_url);
-      alert('Link gerado com sucesso!');
     } catch (err: any) {
       console.error('Erro ao gerar link:', err);
       alert('Erro ao gerar link. Tente novamente.');
@@ -1044,7 +1036,14 @@ export default function PropertyDetailPage() {
                             {linkCopied ? 'Copiado!' : 'Copiar Link'}
                           </button>
                           <a
-                            href={`https://wa.me/${owner?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá! Por favor, confirme a disponibilidade do seu imóvel: ${confirmationLink}`)}`}
+                            href={`https://wa.me/${owner?.phone?.replace(/\D/g, '')}?text=${encodeURIComponent(
+                              `Olá ${owner?.name ? owner.name.split(' ')[0] : ''}!\n\n` +
+                              `Sou ${broker?.name || 'seu corretor'}, da imobiliária.\n\n` +
+                              `Preciso confirmar algumas informações sobre seu imóvel${property?.reference ? ` (${property.reference})` : ''}${property?.neighborhood ? ` no ${property.neighborhood}` : ''}.\n\n` +
+                              `Por favor, acesse o link abaixo para confirmar a disponibilidade e o valor atualizado:\n\n` +
+                              `${confirmationLink}\n\n` +
+                              `Qualquer dúvida, estou à disposição!`
+                            )}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"

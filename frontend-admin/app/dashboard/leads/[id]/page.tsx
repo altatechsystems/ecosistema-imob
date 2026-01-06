@@ -51,7 +51,6 @@ export default function LeadDetailPage() {
         fetchPropertyDetails(leadData.property_id);
       }
     } catch (err: any) {
-      console.error('Erro ao buscar detalhes do lead:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -64,7 +63,7 @@ export default function LeadDetailPage() {
       const propertyData = await adminApi.getProperty(propertyId);
       setProperty(propertyData);
     } catch (err: any) {
-      console.error('Erro ao buscar imóvel:', err);
+      // Error fetching property - silently fail
     } finally {
       setLoadingProperty(false);
     }
@@ -78,7 +77,6 @@ export default function LeadDetailPage() {
       const updatedLead = await adminApi.updateLeadStatus(lead.id, newStatus);
       setLead(updatedLead);
     } catch (err: any) {
-      console.error('Erro ao atualizar status:', err);
       alert('Erro ao atualizar status do lead');
     } finally {
       setUpdatingStatus(false);

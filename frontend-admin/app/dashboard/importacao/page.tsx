@@ -103,7 +103,6 @@ export default function ImportacaoPage() {
         throw new Error('Tenant ID não encontrado');
       }
 
-      console.log('🔐 Getting Firebase auth token...');
       // Get Firebase auth token
       const { auth } = await import('@/lib/firebase');
       const user = auth.currentUser;
@@ -112,7 +111,6 @@ export default function ImportacaoPage() {
       }
       // Force token refresh to ensure it's valid
       const token = await user.getIdToken(true);
-      console.log('✅ Token obtained');
 
       const formData = new FormData();
 
@@ -128,7 +126,6 @@ export default function ImportacaoPage() {
       formData.append('created_by', brokerId || 'system');
 
       const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/import/properties`;
-      console.log('📤 Sending import request to:', url);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -138,16 +135,12 @@ export default function ImportacaoPage() {
         body: formData,
       });
 
-      console.log('📥 Response status:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Erro ao importar arquivo' }));
-        console.error('❌ Error response:', errorData);
         throw new Error(errorData.error || `Erro ao importar arquivo (${response.status})`);
       }
 
       const data = await response.json();
-      console.log('✅ Import response:', data);
 
       // Backend returns async response with batch_id
       // Start polling for batch status
@@ -195,13 +188,10 @@ export default function ImportacaoPage() {
   };
 
   const startPolling = async (batchId: string, tenantId: string) => {
-    console.log('🔄 Starting polling for batch:', batchId);
-
     // Get auth token once for polling
     const { auth } = await import('@/lib/firebase');
     const user = auth.currentUser;
     if (!user) {
-      console.error('❌ No user found for polling');
       return;
     }
     // Force token refresh
@@ -210,7 +200,6 @@ export default function ImportacaoPage() {
     // Poll every 2 seconds
     const interval = setInterval(async () => {
       try {
-        console.log('📊 Polling batch status...');
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/import/batches/${batchId}`,
           {
@@ -221,16 +210,13 @@ export default function ImportacaoPage() {
         );
 
         if (!response.ok) {
-          console.error('❌ Erro ao buscar status do batch:', response.status);
           return;
         }
 
         const batchData = await response.json();
-        console.log('📦 Batch data:', batchData);
 
         // Check if batch is completed
         if (batchData.status === 'completed' || batchData.status === 'failed') {
-          console.log('✅ Batch completed with status:', batchData.status);
           stopPolling();
           setImporting(false);
 
@@ -249,7 +235,6 @@ export default function ImportacaoPage() {
 
               if (errorsResponse.ok) {
                 const errorsData = await errorsResponse.json();
-                console.log('📋 Fetched errors:', errorsData);
 
                 // Map backend errors to frontend format
                 detailedErrors = (errorsData.errors || []).map((err: any) => ({
@@ -276,11 +261,9 @@ export default function ImportacaoPage() {
               ? (new Date(batchData.completed_at).getTime() - new Date(batchData.started_at).getTime()) / 1000
               : 0,
           });
-        } else {
-          console.log('⏳ Batch still processing, status:', batchData.status);
         }
       } catch (error) {
-        console.error('❌ Erro no polling:', error);
+        // Polling error - will retry on next interval
       }
     }, 2000);
 

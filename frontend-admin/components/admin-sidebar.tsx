@@ -91,7 +91,8 @@ export function AdminSidebar({ isOpen = true, onClose }: AdminSidebarProps) {
       await signOut(auth);
       window.location.href = '/login';
     } catch (error) {
-      console.error('Logout error:', error);
+      // Logout error - redirect anyway
+      window.location.href = '/login';
     }
   };
 

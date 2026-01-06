@@ -106,9 +106,8 @@ export default function OwnerDetailsPage() {
           setProperties(propertiesData.data || propertiesData.properties || []);
         }
       } catch (err: any) {
-        console.error('Error fetching owner data:', err);
         setError(err.message || 'Erro ao carregar dados');
-      } finally {
+      } finally{
         setLoading(false);
       }
     };
@@ -175,7 +174,6 @@ export default function OwnerDetailsPage() {
       setIsEditing(false);
       setEditForm({});
     } catch (err: any) {
-      console.error('Error updating owner:', err);
       setError(err.message || 'Erro ao atualizar dados');
     } finally {
       setIsSaving(false);

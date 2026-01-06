@@ -6,6 +6,7 @@ import axios from 'axios';
 import { signInWithCustomToken } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Building2, Loader2, Eye, EyeOff } from 'lucide-react';
+import { signupSchema } from '@/lib/validations';
 
 interface SignupFormProps {
   onSuccess?: () => void;
@@ -39,63 +40,33 @@ export function SignupForm({
     });
   };
 
-  const validateForm = () => {
-    if (!formData.tenant_name.trim()) {
-      setError('Nome da imobiliária é obrigatório');
-      return false;
-    }
-    if (!formData.name.trim()) {
-      setError('Seu nome é obrigatório');
-      return false;
-    }
-    if (!formData.email.trim() || !formData.email.includes('@')) {
-      setError('Email válido é obrigatório');
-      return false;
-    }
-    if (!formData.phone.trim()) {
-      setError('Telefone é obrigatório');
-      return false;
-    }
-    // Validar formato E.164
-    if (!formData.phone.startsWith('+')) {
-      setError('Telefone deve estar no formato internacional (+5511999999999)');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('Senha deve ter no mínimo 6 caracteres');
-      return false;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError('As senhas não coincidem');
-      return false;
-    }
-    return true;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!validateForm()) {
-      return;
-    }
-
     setLoading(true);
 
     try {
+      // Validate password confirmation
+      if (formData.password !== formData.confirmPassword) {
+        setError('As senhas não coincidem');
+        setLoading(false);
+        return;
+      }
+
+      // Validate with Zod
+      const validatedData = signupSchema.parse({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        phone: formData.phone,
+        tenant_name: formData.tenant_name,
+      });
       // 1. Criar tenant e usuário no backend
       const signupResponse = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/signup`,
-        {
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-          phone: formData.phone,
-          tenant_name: formData.tenant_name,
-        }
+        validatedData
       );
-
-      console.log('Signup successful:', signupResponse.data);
 
       const data = signupResponse.data;
 
@@ -116,9 +87,10 @@ export function SignupForm({
       // 5. Redirecionar
       router.push(redirectTo);
     } catch (err: any) {
-      console.error('Signup error:', err);
-
-      if (err.response?.data?.error) {
+      if (err.errors) {
+        // Zod validation error
+        setError(err.errors[0]?.message || 'Dados inválidos');
+      } else if (err.response?.data?.error) {
         setError(err.response.data.error);
       } else if (err.response?.status === 409) {
         setError('Email já cadastrado. Faça login ou use outro email.');

@@ -40,6 +40,7 @@ export default function ImoveisPage() {
   const [typeFilter, setTypeFilter] = useState<PropertyTypeFilter>('all');
   const [hasMoreToFetch, setHasMoreToFetch] = useState(true);
   const [currentPage, setCurrentPage] = useState(0);
+  const [apiStats, setApiStats] = useState<any>(null); // Stats from API
   const observerTarget = useRef<HTMLDivElement>(null);
   const itemsPerPage = 12;
   const pageSize = 200; // Fetch 200 properties per API call
@@ -67,12 +68,15 @@ export default function ImoveisPage() {
       }
 
       const data = await response.json();
-      const loadTime = performance.now() - startTime;
-      console.log(`✅ Loaded ${data.data?.length || 0} properties (page ${page + 1}) in ${loadTime.toFixed(0)}ms. Total: ${data.total || 'unknown'}`);
 
-      // Store total count from API (only on first page)
-      if (page === 0 && data.total) {
-        setTotalCount(data.total);
+      // Store total count and stats from API (only on first page)
+      if (page === 0) {
+        if (data.total) {
+          setTotalCount(data.total);
+        }
+        if (data.stats) {
+          setApiStats(data.stats);
+        }
       }
 
       // Optimize: Only process essential fields
@@ -108,7 +112,6 @@ export default function ImoveisPage() {
       setHasMoreToFetch(optimizedProperties.length === pageSize);
       setCurrentPage(page);
     } catch (err: any) {
-      console.error('Erro ao buscar imóveis:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -150,6 +153,9 @@ export default function ImoveisPage() {
     };
     return types[type] || type;
   };
+
+  // Check if all data is loaded
+  const allDataLoaded = !hasMoreToFetch && !loadingMore;
 
   // Memoize expensive calculations - optimize by doing single pass
   const stats = useMemo(() => {
@@ -237,12 +243,23 @@ export default function ImoveisPage() {
     setDisplayCount(12);
   }, [searchTerm, typeFilter]);
 
+  // Auto-increase display count when more properties are loaded and we're near the end
+  useEffect(() => {
+    if (displayCount >= filteredProperties.length && filteredProperties.length > 0) {
+      // If we're showing all available, increase display to accommodate new data
+      const shouldExpand = properties.length > filteredProperties.length;
+      if (shouldExpand) {
+        setDisplayCount(prev => prev + itemsPerPage);
+      }
+    }
+  }, [properties.length, filteredProperties.length, displayCount, itemsPerPage]);
+
   // Infinite scroll observer
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          setDisplayCount(prev => prev + itemsPerPage);
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setDisplayCount(prev => Math.min(prev + itemsPerPage, filteredProperties.length));
         }
       },
       { threshold: 0.1 }
@@ -258,12 +275,12 @@ export default function ImoveisPage() {
         observer.unobserve(currentTarget);
       }
     };
-  }, [hasMore, loading, itemsPerPage]);
+  }, [hasMore, loading, loadingMore, itemsPerPage, displayCount, filteredProperties.length]);
 
   return (
     <div className="p-3 sm:p-4 md:p-6">
-      {/* Stats Cards - Compact */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2 sm:gap-3 mb-4 sm:mb-6">
+      {/* Status Cards - First Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-3 sm:mb-4">
         <button
           onClick={() => setTypeFilter('all')}
           className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
@@ -301,8 +318,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Disponíveis</p>
-              <p className="text-base sm:text-lg font-bold text-green-600">{stats.available}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Disponíveis {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-green-600">{apiStats?.available ?? stats.available}</p>
             </div>
           </div>
         </button>
@@ -319,12 +338,17 @@ export default function ImoveisPage() {
               <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Pend. Confirm.</p>
-              <p className="text-base sm:text-lg font-bold text-amber-600">{stats.pending_confirmation}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Pend. Confirm. {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-amber-600">{apiStats?.pending_confirmation ?? stats.pending_confirmation}</p>
             </div>
           </div>
         </button>
+      </div>
 
+      {/* Property Type Cards - Second Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={() => setTypeFilter('apartment')}
           className={`bg-white rounded-lg shadow-sm p-2 sm:p-3 text-left transition-all hover:shadow-md ${
@@ -336,8 +360,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Aptos</p>
-              <p className="text-base sm:text-lg font-bold text-orange-600">{stats.apartments}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Aptos {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-orange-600">{apiStats?.apartments ?? stats.apartments}</p>
             </div>
           </div>
         </button>
@@ -353,8 +379,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Casas</p>
-              <p className="text-base sm:text-lg font-bold text-purple-600">{stats.houses}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Casas {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-purple-600">{apiStats?.houses ?? stats.houses}</p>
             </div>
           </div>
         </button>
@@ -370,8 +398,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Chácaras</p>
-              <p className="text-base sm:text-lg font-bold text-teal-600">{stats.chacaras}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Chácaras {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-teal-600">{apiStats?.chacaras ?? stats.chacaras}</p>
             </div>
           </div>
         </button>
@@ -387,8 +417,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Terrenos</p>
-              <p className="text-base sm:text-lg font-bold text-amber-600">{stats.terrenos}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Terrenos {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-amber-600">{apiStats?.terrenos ?? stats.terrenos}</p>
             </div>
           </div>
         </button>
@@ -404,8 +436,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Fazendas</p>
-              <p className="text-base sm:text-lg font-bold text-emerald-600">{stats.fazendas}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Fazendas {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-emerald-600">{apiStats?.fazendas ?? stats.fazendas}</p>
             </div>
           </div>
         </button>
@@ -421,8 +455,10 @@ export default function ImoveisPage() {
               <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-lime-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs text-gray-600 truncate">Sítios</p>
-              <p className="text-base sm:text-lg font-bold text-lime-600">{stats.sitios}</p>
+              <p className="text-[10px] sm:text-xs text-gray-600 truncate">
+                Sítios {!allDataLoaded && <span className="text-blue-600">⏳</span>}
+              </p>
+              <p className="text-base sm:text-lg font-bold text-lime-600">{apiStats?.sitios ?? stats.sitios}</p>
             </div>
           </div>
         </button>
@@ -616,22 +652,21 @@ export default function ImoveisPage() {
 
         {/* Infinite Scroll Trigger & Loading Indicator */}
         <div ref={observerTarget} className="py-8">
-          {loadingMore && (
+          {(loadingMore || hasMore) && (
             <div className="text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-gray-600 mt-2">Carregando mais imóveis em segundo plano...</p>
+              <p className="text-gray-600 mt-2">
+                {loadingMore
+                  ? 'Carregando do servidor...'
+                  : `Mostrando ${displayCount} de ${filteredProperties.length} imóveis...`}
+              </p>
             </div>
           )}
-          {hasMore && (
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-gray-600 mt-2">Carregando mais imóveis...</p>
-            </div>
-          )}
-          {!hasMore && !loadingMore && filteredProperties.length > 12 && (
+          {!hasMore && !loadingMore && filteredProperties.length > 0 && (
             <div className="text-center">
               <p className="text-gray-600">
-                Mostrando todos os {filteredProperties.length} imóveis ({properties.length} carregados)
+                ✓ Mostrando todos os {filteredProperties.length} imóveis
+                {properties.length < totalCount && ` (${properties.length} de ${totalCount} carregados do servidor)`}
               </p>
             </div>
           )}

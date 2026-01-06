@@ -21,8 +21,6 @@ export function TenantSelector({ isPlatformAdmin }: TenantSelectorProps) {
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  console.log('TenantSelector - isPlatformAdmin:', isPlatformAdmin);
-
   useEffect(() => {
     if (isPlatformAdmin) {
       fetchTenants();
@@ -63,7 +61,7 @@ export function TenantSelector({ isPlatformAdmin }: TenantSelectorProps) {
         setCurrentTenant(current || null);
       }
     } catch (error) {
-      console.error('Erro ao buscar tenants:', error);
+      // Error fetching tenants - silently fail
     } finally {
       setLoading(false);
     }

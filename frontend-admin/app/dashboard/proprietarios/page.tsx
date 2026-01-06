@@ -45,7 +45,6 @@ export default function ProprietariosPage() {
       const token = await user.getIdToken();
 
       const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/owners?limit=1000`;
-      console.log('📍 Fetching owners from:', url);
 
       const response = await fetch(url, {
         headers: {
@@ -58,11 +57,9 @@ export default function ProprietariosPage() {
       }
 
       const data = await response.json();
-      console.log('✅ API Response:', data);
 
       setOwners(data.data || []);
     } catch (err: any) {
-      console.error('Erro ao buscar proprietários:', err);
       setError(err.message);
     } finally {
       setLoading(false);

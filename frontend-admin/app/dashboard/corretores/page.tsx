@@ -33,10 +33,7 @@ export default function BrokersPage() {
       setLoading(true);
       const tenantId = localStorage.getItem('tenant_id');
 
-      console.log('🔍 Tenant ID:', tenantId);
-
       if (!tenantId) {
-        console.error('Tenant ID não encontrado');
         return;
       }
 
@@ -44,7 +41,6 @@ export default function BrokersPage() {
       const user = auth.currentUser;
 
       if (!user) {
-        console.error('Usuário não autenticado');
         router.push('/login');
         return;
       }
@@ -52,33 +48,25 @@ export default function BrokersPage() {
       const token = await user.getIdToken(true);
       const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/brokers`;
 
-      console.log('🔗 Fetching URL:', url);
-      console.log('🔑 Token:', token ? 'Present' : 'Missing');
-
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      console.log('📡 Response status:', response.status);
-
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Error response:', errorData);
         throw new Error(errorData.error || 'Erro ao buscar corretores');
       }
 
       const data = await response.json();
-      console.log('✅ Brokers data received:', data);
 
       const brokersData = data.data || [];
-      console.log('📊 Total brokers:', brokersData.length);
 
       setBrokers(brokersData);
       calculateStats(brokersData);
     } catch (err: any) {
-      console.error('❌ Erro ao buscar corretores:', err);
+      setError(err.message || 'Erro ao buscar corretores');
     } finally {
       setLoading(false);
     }
