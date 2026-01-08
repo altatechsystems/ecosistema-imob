@@ -395,5 +395,6 @@ export default function BrokerProfilePage() {
           </div>
         </div>
       </div>
+    </div>
   );
 }
