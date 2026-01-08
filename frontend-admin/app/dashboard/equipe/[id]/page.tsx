@@ -173,9 +173,8 @@ export default function EditUserPage() {
       permissions: [
         { key: STANDARD_PERMISSIONS.PROPERTY_VIEW, label: 'Visualizar imóveis' },
         { key: STANDARD_PERMISSIONS.PROPERTY_CREATE, label: 'Criar imóveis' },
-        { key: STANDARD_PERMISSIONS.PROPERTY_EDIT, label: 'Editar imóveis' },
+        { key: STANDARD_PERMISSIONS.PROPERTY_UPDATE, label: 'Editar imóveis' },
         { key: STANDARD_PERMISSIONS.PROPERTY_DELETE, label: 'Excluir imóveis' },
-        { key: STANDARD_PERMISSIONS.PROPERTY_PUBLISH, label: 'Publicar imóveis' },
       ],
     },
     {
@@ -192,7 +191,7 @@ export default function EditUserPage() {
       permissions: [
         { key: STANDARD_PERMISSIONS.OWNER_VIEW, label: 'Visualizar proprietários' },
         { key: STANDARD_PERMISSIONS.OWNER_CREATE, label: 'Criar proprietários' },
-        { key: STANDARD_PERMISSIONS.OWNER_EDIT, label: 'Editar proprietários' },
+        { key: STANDARD_PERMISSIONS.OWNER_UPDATE, label: 'Editar proprietários' },
         { key: STANDARD_PERMISSIONS.OWNER_DELETE, label: 'Excluir proprietários' },
       ],
     },
