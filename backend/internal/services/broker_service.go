@@ -589,3 +589,109 @@ func (s *BrokerService) GetBrokerProperties(ctx context.Context, tenantID, broke
 
 	return properties, nil
 }
+
+// GetBrokerFromAnyTenant retrieves a broker by ID across all tenants (parallel query)
+// This is used by the public portal agregador to find brokers without knowing their tenant
+// Returns the broker and the tenant_id it belongs to
+func (s *BrokerService) GetBrokerFromAnyTenant(ctx context.Context, brokerID string) (*models.Broker, string, error) {
+	if brokerID == "" {
+		return nil, "", fmt.Errorf("broker_id is required")
+	}
+
+	// Get all active tenants
+	tenants, err := s.tenantRepo.ListActive(ctx, repositories.PaginationOptions{Limit: 100})
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to list tenants: %w", err)
+	}
+
+	if len(tenants) == 0 {
+		return nil, "", repositories.ErrNotFound
+	}
+
+	// Create channels for parallel queries
+	type result struct {
+		broker   *models.Broker
+		tenantID string
+	}
+
+	results := make(chan result, len(tenants))
+	done := make(chan bool)
+
+	// Query each tenant's brokers collection in parallel
+	for _, tenant := range tenants {
+		go func(tid string) {
+			broker, err := s.brokerRepo.Get(ctx, tid, brokerID)
+			if err == nil && broker != nil {
+				results <- result{broker: broker, tenantID: tid}
+			}
+			done <- true
+		}(tenant.ID)
+	}
+
+	// Wait for all goroutines to complete
+	completed := 0
+	var foundBroker *models.Broker
+	var foundTenantID string
+
+	for completed < len(tenants) {
+		select {
+		case res := <-results:
+			if foundBroker == nil { // Take first match
+				foundBroker = res.broker
+				foundTenantID = res.tenantID
+			}
+		case <-done:
+			completed++
+		}
+	}
+
+	if foundBroker == nil {
+		return nil, "", repositories.ErrNotFound
+	}
+
+	return foundBroker, foundTenantID, nil
+}
+
+// GetPublicBrokerProperties retrieves public properties for a broker across tenants
+// This is used by the public portal agregador
+func (s *BrokerService) GetPublicBrokerProperties(ctx context.Context, brokerID string, limit int) ([]*models.Property, error) {
+	if brokerID == "" {
+		return nil, fmt.Errorf("broker_id is required")
+	}
+
+	// Find broker to get tenant_id
+	_, tenantID, err := s.GetBrokerFromAnyTenant(ctx, brokerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find broker: %w", err)
+	}
+
+	// List properties where this broker is the captador
+	// Will filter for public and available in memory
+	properties, err := s.propertyRepo.ListByCaptador(ctx, tenantID, brokerID, repositories.PaginationOptions{Limit: limit * 2})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list broker properties: %w", err)
+	}
+
+	// Filter in memory for visibility and status (repository doesn't support these filters on ListByCaptador)
+	filteredProperties := make([]*models.Property, 0, limit)
+	for _, property := range properties {
+		// Only include public and available properties
+		if property.Visibility == models.PropertyVisibilityPublic && property.Status == models.PropertyStatusAvailable {
+			// Populate cover image from canonical listing
+			if property.CanonicalListingID != "" {
+				listing, err := s.listingRepo.Get(ctx, tenantID, property.CanonicalListingID)
+				if err == nil && listing != nil && len(listing.Photos) > 0 {
+					property.CoverImageURL = listing.Photos[0].ThumbURL
+				}
+			}
+			filteredProperties = append(filteredProperties, property)
+
+			// Stop when we reach the limit
+			if len(filteredProperties) >= limit {
+				break
+			}
+		}
+	}
+
+	return filteredProperties, nil
+}

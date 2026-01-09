@@ -311,6 +311,10 @@ type Handlers struct {
 	ImportHandler                *handlers.ImportHandler
 	OwnerConfirmationHandler     *handlers.OwnerConfirmationHandler     // PROMPT 08
 	ScheduledConfirmationHandler *handlers.ScheduledConfirmationHandler // Monthly confirmations
+	// Public handlers (cross-tenant, no tenant_id required)
+	PublicPropertyHandler *handlers.PublicPropertyHandler // Portal agregador property endpoints
+	PublicLeadHandler     *handlers.PublicLeadHandler     // Portal agregador lead endpoints
+	PublicBrokerHandler   *handlers.PublicBrokerHandler   // Portal agregador broker endpoints
 }
 
 // initializeHandlers initializes all handlers
@@ -335,6 +339,10 @@ func initializeHandlers(authClient *auth.Client, firestoreClient *firestore.Clie
 		ImportHandler:                handlers.NewImportHandler(services.ImportService),
 		OwnerConfirmationHandler:     handlers.NewOwnerConfirmationHandler(services.OwnerConfirmationService),     // PROMPT 08
 		ScheduledConfirmationHandler: handlers.NewScheduledConfirmationHandler(services.MonthlyConfirmationScheduler), // Monthly confirmations
+		// Public handlers (cross-tenant, no tenant_id required)
+		PublicPropertyHandler: handlers.NewPublicPropertyHandler(services.PropertyService),
+		PublicLeadHandler:     handlers.NewPublicLeadHandler(services.LeadService, services.PropertyService),
+		PublicBrokerHandler:   handlers.NewPublicBrokerHandler(services.BrokerService),
 	}
 }
 
@@ -414,6 +422,26 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 		// Public images
 		public.GET("/property-images/:property_id", handlers.StorageHandler.ListImages)
 		public.GET("/property-images/:property_id/:image_id", handlers.StorageHandler.GetImageURL)
+	}
+
+	// Public routes for portal agregador (NO tenant_id required)
+	// List properties/brokers/leads across ALL tenants
+	publicPortal := api.Group("/public")
+	publicPortal.Use(middleware.StrictRateLimit())
+	{
+		// Public property endpoints (cross-tenant)
+		publicPortal.GET("/properties", handlers.PublicPropertyHandler.ListPublicProperties)
+		publicPortal.GET("/properties/:id", handlers.PublicPropertyHandler.GetPublicProperty)
+		publicPortal.GET("/properties/slug/:slug", handlers.PublicPropertyHandler.GetPublicPropertyBySlug)
+
+		// Public lead creation endpoints (cross-tenant)
+		// Tenant is resolved automatically from property_id
+		publicPortal.POST("/properties/:property_id/leads/whatsapp", handlers.PublicLeadHandler.CreatePublicWhatsAppLead)
+		publicPortal.POST("/properties/:property_id/leads/form", handlers.PublicLeadHandler.CreatePublicFormLead)
+
+		// Public broker endpoints (cross-tenant)
+		publicPortal.GET("/brokers/:id/profile", handlers.PublicBrokerHandler.GetPublicBrokerProfile)
+		publicPortal.GET("/brokers/:id/properties", handlers.PublicBrokerHandler.GetPublicBrokerProperties)
 	}
 
 	// Protected routes (require authentication) - admin dashboard

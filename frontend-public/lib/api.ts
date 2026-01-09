@@ -78,28 +78,28 @@ class ApiClient {
     }
 
     const response = await this.client.get<PropertyListResponse>(
-      `/v1/properties?${params.toString()}`
+      `/v1/public/properties?${params.toString()}`
     );
     return response.data;
   }
 
   async getProperty(id: string): Promise<Property> {
     const response = await this.client.get<PropertyResponse>(
-      `/v1/properties/${id}`
+      `/v1/public/properties/${id}`
     );
     return response.data.data;
   }
 
   async getPropertyBySlug(slug: string): Promise<Property> {
     const response = await this.client.get<PropertyResponse>(
-      `/v1/properties/slug/${slug}`
+      `/v1/public/properties/slug/${slug}`
     );
     return response.data.data;
   }
 
   async getPropertyImages(propertyId: string): Promise<any> {
     const response = await this.client.get(
-      `/v1/properties/${propertyId}/images`
+      `/v1/public/properties/${propertyId}/images`
     );
     return response.data.data;
   }
@@ -107,7 +107,7 @@ class ApiClient {
   // Leads
   async createLead(data: CreateLeadRequest): Promise<CreateLeadResponse> {
     const response = await this.client.post<CreateLeadResponse>(
-      `/v1/leads`,
+      `/v1/public/leads`,
       data
     );
     return response.data;
@@ -128,7 +128,7 @@ class ApiClient {
     message: string;
   }> {
     const response = await this.client.post(
-      `/v1/properties/${propertyId}/leads/whatsapp`,
+      `/v1/public/properties/${propertyId}/leads/whatsapp`,
       data || {}
     );
     return response.data;
@@ -151,7 +151,7 @@ class ApiClient {
     message: string;
   }> {
     const response = await this.client.post(
-      `/v1/properties/${propertyId}/leads/form`,
+      `/v1/public/properties/${propertyId}/leads/form`,
       data
     );
     return response.data;
@@ -202,14 +202,14 @@ class ApiClient {
   // Brokers
   async getBrokerPublicProfile(brokerId: string): Promise<Broker> {
     const response = await this.client.get<{ success: boolean; data: Broker }>(
-      `/v1/brokers/${brokerId}/public`
+      `/v1/public/brokers/${brokerId}/profile`
     );
     return response.data.data;
   }
 
   async getBrokerProperties(brokerId: string, limit: number = 20): Promise<Property[]> {
     const response = await this.client.get<{ success: boolean; data: Property[] }>(
-      `/v1/brokers/${brokerId}/properties`,
+      `/v1/public/brokers/${brokerId}/properties`,
       {
         params: { limit }
       }

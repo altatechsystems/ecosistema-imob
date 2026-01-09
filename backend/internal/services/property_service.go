@@ -421,6 +421,78 @@ func (s *PropertyService) ListProperties(ctx context.Context, tenantID string, f
 	return properties, nil
 }
 
+// ListAllPublicProperties retrieves PUBLIC properties across ALL tenants with optional filters and pagination
+// This is used by the public portal agregador to list properties from all tenants
+func (s *PropertyService) ListAllPublicProperties(ctx context.Context, filters *repositories.PropertyFilters, opts repositories.PaginationOptions) ([]*models.Property, error) {
+	properties, err := s.propertyRepo.ListAllPublic(ctx, filters, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list public properties: %w", err)
+	}
+
+	// Enrich each property with photos and broker data
+	for _, property := range properties {
+		// Populate photos from canonical listing
+		s.populatePropertyPhotos(ctx, property.TenantID, property)
+
+		// Populate broker data for public display
+		s.populatePropertyBroker(ctx, property.TenantID, property)
+	}
+
+	return properties, nil
+}
+
+// GetPublicProperty retrieves a PUBLIC property by ID (across all tenants)
+// This is used by the public portal agregador
+func (s *PropertyService) GetPublicProperty(ctx context.Context, id string) (*models.Property, error) {
+	if id == "" {
+		return nil, fmt.Errorf("property id is required")
+	}
+
+	// Get property without tenant verification (empty tenant_id)
+	property, err := s.propertyRepo.Get(ctx, "", id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public property: %w", err)
+	}
+
+	// Verify property is public and available
+	if property.Visibility != models.PropertyVisibilityPublic {
+		return nil, fmt.Errorf("property is not public")
+	}
+	if property.Status != models.PropertyStatusAvailable {
+		return nil, fmt.Errorf("property is not available")
+	}
+
+	// Populate photos from canonical listing
+	s.populatePropertyPhotos(ctx, property.TenantID, property)
+
+	// Populate broker data for public display
+	s.populatePropertyBroker(ctx, property.TenantID, property)
+
+	return property, nil
+}
+
+// GetPublicPropertyBySlug retrieves a PUBLIC property by slug (across all tenants)
+// This is used by the public portal agregador
+func (s *PropertyService) GetPublicPropertyBySlug(ctx context.Context, slug string) (*models.Property, error) {
+	if slug == "" {
+		return nil, fmt.Errorf("property slug is required")
+	}
+
+	// Get property by slug without tenant verification
+	property, err := s.propertyRepo.GetBySlugPublic(ctx, slug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public property by slug: %w", err)
+	}
+
+	// Populate photos from canonical listing
+	s.populatePropertyPhotos(ctx, property.TenantID, property)
+
+	// Populate broker data for public display
+	s.populatePropertyBroker(ctx, property.TenantID, property)
+
+	return property, nil
+}
+
 // CountProperties returns the total number of properties for a tenant with optional filters
 func (s *PropertyService) CountProperties(ctx context.Context, tenantID string, filters *repositories.PropertyFilters) (int, error) {
 	if tenantID == "" {

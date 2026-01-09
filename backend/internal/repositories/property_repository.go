@@ -67,18 +67,15 @@ func (r *PropertyRepository) Create(ctx context.Context, property *models.Proper
 }
 
 // Get retrieves a property by ID
+// If tenantID is empty, skips tenant verification (used for public endpoints)
 func (r *PropertyRepository) Get(ctx context.Context, tenantID, id string) (*models.Property, error) {
-	if tenantID == "" {
-		return nil, fmt.Errorf("%w: tenant_id is required", ErrInvalidInput)
-	}
-
 	var property models.Property
 	if err := r.GetDocument(ctx, "properties", id, &property); err != nil {
 		return nil, err
 	}
 
-	// Verify tenant ownership
-	if property.TenantID != tenantID {
+	// Verify tenant ownership only if tenantID is provided
+	if tenantID != "" && property.TenantID != tenantID {
 		return nil, ErrNotFound
 	}
 
@@ -114,6 +111,39 @@ func (r *PropertyRepository) GetBySlug(ctx context.Context, tenantID, slug strin
 	var property models.Property
 	if err := doc.DataTo(&property); err != nil {
 		return nil, fmt.Errorf("failed to decode property: %w", err)
+	}
+
+	property.ID = doc.Ref.ID
+	return &property, nil
+}
+
+// GetBySlugPublic retrieves a PUBLIC property by slug (across all tenants)
+// This is used by the public portal agregador
+func (r *PropertyRepository) GetBySlugPublic(ctx context.Context, slug string) (*models.Property, error) {
+	if slug == "" {
+		return nil, fmt.Errorf("%w: slug is required", ErrInvalidInput)
+	}
+
+	query := r.Client().Collection("properties").
+		Where("slug", "==", slug).
+		Where("visibility", "==", string(models.PropertyVisibilityPublic)).
+		Where("status", "==", string(models.PropertyStatusAvailable)).
+		Limit(1)
+
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	doc, err := iter.Next()
+	if err == iterator.Done {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query public property by slug: %w", err)
+	}
+
+	var property models.Property
+	if err := doc.DataTo(&property); err != nil {
+		return nil, fmt.Errorf("failed to decode public property: %w", err)
 	}
 
 	property.ID = doc.Ref.ID
@@ -289,6 +319,76 @@ func (r *PropertyRepository) List(ctx context.Context, tenantID string, filters 
 			}
 		}
 
+		properties = append(properties, &property)
+	}
+
+	return properties, nil
+}
+
+// ListAllPublic retrieves PUBLIC properties across ALL tenants with optional filters and pagination
+// This is used by the public portal agregador to list properties from all tenants
+func (r *PropertyRepository) ListAllPublic(ctx context.Context, filters *PropertyFilters, opts PaginationOptions) ([]*models.Property, error) {
+	if opts.Limit == 0 {
+		opts = DefaultPaginationOptions()
+	}
+
+	// CRITICAL: Always filter by visibility=public and status=available for security
+	query := r.Client().Collection("properties").
+		Where("visibility", "==", string(models.PropertyVisibilityPublic)).
+		Where("status", "==", string(models.PropertyStatusAvailable))
+
+	// Apply optional filters if provided
+	if filters != nil {
+		if filters.PropertyType != nil {
+			query = query.Where("property_type", "==", string(*filters.PropertyType))
+		}
+		if filters.TransactionType != nil {
+			query = query.Where("transaction_type", "==", string(*filters.TransactionType))
+		}
+		if filters.City != "" {
+			query = query.Where("city", "==", filters.City)
+		}
+		if filters.Neighborhood != "" {
+			query = query.Where("neighborhood", "==", filters.Neighborhood)
+		}
+		if filters.MinPrice != nil {
+			query = query.Where("price_amount", ">=", *filters.MinPrice)
+		}
+		if filters.MaxPrice != nil {
+			query = query.Where("price_amount", "<=", *filters.MaxPrice)
+		}
+		if filters.MinBedrooms != nil {
+			query = query.Where("bedrooms", ">=", *filters.MinBedrooms)
+		}
+		if filters.MinBathrooms != nil {
+			query = query.Where("bathrooms", ">=", *filters.MinBathrooms)
+		}
+	}
+
+	// Apply pagination limit
+	if opts.Limit > 0 {
+		query = query.Limit(opts.Limit)
+	}
+
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	properties := make([]*models.Property, 0)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to iterate public properties: %w", err)
+		}
+
+		var property models.Property
+		if err := doc.DataTo(&property); err != nil {
+			return nil, fmt.Errorf("failed to decode public property: %w", err)
+		}
+
+		property.ID = doc.Ref.ID
 		properties = append(properties, &property)
 	}
 
