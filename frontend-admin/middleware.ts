@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+  console.log('[Middleware] Processing request:', request.nextUrl.pathname);
+
+  try {
+    const response = NextResponse.next();
 
   // Security Headers
   // X-Frame-Options: Prevent clickjacking attacks
@@ -47,7 +50,13 @@ export function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=()'
   );
 
-  return response;
+    console.log('[Middleware] Request processed successfully');
+    return response;
+  } catch (error) {
+    console.error('[Middleware] ❌ Error:', error);
+    // Return a simple response to avoid middleware failure
+    return NextResponse.next();
+  }
 }
 
 // Apply middleware to all routes except static files and API routes
