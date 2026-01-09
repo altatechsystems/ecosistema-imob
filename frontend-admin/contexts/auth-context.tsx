@@ -66,16 +66,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Update API client with tenant
         api.setTenant(extractedTenantId);
 
-        // Store in sessionStorage as backup for UX
-        sessionStorage.setItem('tenant_id', extractedTenantId);
+        // Store in sessionStorage as backup for UX (only in browser)
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('tenant_id', extractedTenantId);
+        }
 
         // Build user profile from claims and localStorage (legacy)
         // In the future, we should fetch full profile from backend
+        const brokerName = typeof window !== 'undefined'
+          ? localStorage.getItem('broker_name')
+          : null;
+
         const profile: User = {
           id: (claims.user_id || claims.broker_id) as string,
           tenant_id: extractedTenantId,
           firebase_uid: firebaseUser.uid,
-          name: localStorage.getItem('broker_name') || firebaseUser.displayName || 'User',
+          name: brokerName || firebaseUser.displayName || 'User',
           email: firebaseUser.email || '',
           role: (claims.role as 'admin' | 'manager') || 'manager',
           is_active: true,
@@ -116,7 +122,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTenantId(null);
         setAvailableTenants([]);
         api.setTenant(''); // Clear API client tenant
-        sessionStorage.removeItem('tenant_id');
+
+        // Clear sessionStorage (only in browser)
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('tenant_id');
+        }
       }
 
       setLoading(false);
@@ -150,12 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // This will trigger onAuthStateChanged above
       await signInWithCustomToken(auth, data.firebase_token);
 
-      // Store additional data in localStorage (legacy support)
+      // Store additional data in localStorage (legacy support) - only in browser
       // TODO: Remove once we fetch full profile from backend
-      localStorage.setItem('broker_id', data.broker.id);
-      localStorage.setItem('broker_role', data.broker.role);
-      localStorage.setItem('broker_name', data.broker.name);
-      localStorage.setItem('is_platform_admin', data.is_platform_admin ? 'true' : 'false');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('broker_id', data.broker.id);
+        localStorage.setItem('broker_role', data.broker.role);
+        localStorage.setItem('broker_name', data.broker.name);
+        localStorage.setItem('is_platform_admin', data.is_platform_admin ? 'true' : 'false');
+      }
 
       // Redirect to dashboard
       router.push('/dashboard');
@@ -172,15 +184,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await firebaseSignOut(auth);
 
-      // Clear localStorage
-      localStorage.removeItem('broker_id');
-      localStorage.removeItem('broker_role');
-      localStorage.removeItem('broker_name');
-      localStorage.removeItem('is_platform_admin');
-      localStorage.removeItem('tenant_id'); // legacy
+      // Clear storage (only in browser)
+      if (typeof window !== 'undefined') {
+        // Clear localStorage
+        localStorage.removeItem('broker_id');
+        localStorage.removeItem('broker_role');
+        localStorage.removeItem('broker_name');
+        localStorage.removeItem('is_platform_admin');
+        localStorage.removeItem('tenant_id'); // legacy
 
-      // Clear sessionStorage
-      sessionStorage.removeItem('tenant_id');
+        // Clear sessionStorage
+        sessionStorage.removeItem('tenant_id');
+      }
 
       // State is cleared by onAuthStateChanged listener
 
