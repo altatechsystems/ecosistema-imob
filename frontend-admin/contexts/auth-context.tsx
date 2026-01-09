@@ -105,6 +105,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Listen to Firebase auth state changes
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') {
+      setLoading(false);
+      return;
+    }
+
     if (!auth) {
       setLoading(false);
       return;
@@ -122,11 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setTenantId(null);
         setAvailableTenants([]);
         api.setTenant(''); // Clear API client tenant
-
-        // Clear sessionStorage (only in browser)
-        if (typeof window !== 'undefined') {
-          sessionStorage.removeItem('tenant_id');
-        }
+        sessionStorage.removeItem('tenant_id');
       }
 
       setLoading(false);
@@ -137,6 +139,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Login function
   const login = async (email: string, password: string) => {
+    // Ensure we're on client side
+    if (typeof window === 'undefined') {
+      throw new Error('Login can only be called on client side');
+    }
+
+    if (!auth) {
+      throw new Error('Firebase Auth not initialized');
+    }
+
     try {
       setLoading(true);
 
@@ -160,14 +171,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // This will trigger onAuthStateChanged above
       await signInWithCustomToken(auth, data.firebase_token);
 
-      // Store additional data in localStorage (legacy support) - only in browser
+      // Store additional data in localStorage (legacy support)
       // TODO: Remove once we fetch full profile from backend
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('broker_id', data.broker.id);
-        localStorage.setItem('broker_role', data.broker.role);
-        localStorage.setItem('broker_name', data.broker.name);
-        localStorage.setItem('is_platform_admin', data.is_platform_admin ? 'true' : 'false');
-      }
+      localStorage.setItem('broker_id', data.broker.id);
+      localStorage.setItem('broker_role', data.broker.role);
+      localStorage.setItem('broker_name', data.broker.name);
+      localStorage.setItem('is_platform_admin', data.is_platform_admin ? 'true' : 'false');
 
       // Redirect to dashboard
       router.push('/dashboard');
@@ -181,21 +190,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Logout function
   const logout = async () => {
+    // Ensure we're on client side
+    if (typeof window === 'undefined') {
+      throw new Error('Logout can only be called on client side');
+    }
+
+    if (!auth) {
+      throw new Error('Firebase Auth not initialized');
+    }
+
     try {
       await firebaseSignOut(auth);
 
-      // Clear storage (only in browser)
-      if (typeof window !== 'undefined') {
-        // Clear localStorage
-        localStorage.removeItem('broker_id');
-        localStorage.removeItem('broker_role');
-        localStorage.removeItem('broker_name');
-        localStorage.removeItem('is_platform_admin');
-        localStorage.removeItem('tenant_id'); // legacy
+      // Clear localStorage
+      localStorage.removeItem('broker_id');
+      localStorage.removeItem('broker_role');
+      localStorage.removeItem('broker_name');
+      localStorage.removeItem('is_platform_admin');
+      localStorage.removeItem('tenant_id'); // legacy
 
-        // Clear sessionStorage
-        sessionStorage.removeItem('tenant_id');
-      }
+      // Clear sessionStorage
+      sessionStorage.removeItem('tenant_id');
 
       // State is cleared by onAuthStateChanged listener
 
