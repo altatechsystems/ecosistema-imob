@@ -11,10 +11,10 @@ import { CreateLeadRequest, CreateLeadResponse } from '@/types/lead';
 
 class ApiClient {
   private client: AxiosInstance;
-  private tenantId: string;
 
   constructor() {
-    this.tenantId = process.env.NEXT_PUBLIC_TENANT_ID || '';
+    // Frontend público é um portal agregador - não usa tenant_id fixo
+    // Lista imóveis de TODOS os tenants
 
     this.client = axios.create({
       baseURL: process.env.NEXT_PUBLIC_API_URL,
@@ -78,28 +78,28 @@ class ApiClient {
     }
 
     const response = await this.client.get<PropertyListResponse>(
-      `/v1/${this.tenantId}/properties?${params.toString()}`
+      `/v1/properties?${params.toString()}`
     );
     return response.data;
   }
 
   async getProperty(id: string): Promise<Property> {
     const response = await this.client.get<PropertyResponse>(
-      `/v1/${this.tenantId}/properties/${id}`
+      `/v1/properties/${id}`
     );
     return response.data.data;
   }
 
   async getPropertyBySlug(slug: string): Promise<Property> {
     const response = await this.client.get<PropertyResponse>(
-      `/v1/${this.tenantId}/properties/slug/${slug}`
+      `/v1/properties/slug/${slug}`
     );
     return response.data.data;
   }
 
   async getPropertyImages(propertyId: string): Promise<any> {
     const response = await this.client.get(
-      `/v1/${this.tenantId}/properties/${propertyId}/images`
+      `/v1/properties/${propertyId}/images`
     );
     return response.data.data;
   }
@@ -107,7 +107,7 @@ class ApiClient {
   // Leads
   async createLead(data: CreateLeadRequest): Promise<CreateLeadResponse> {
     const response = await this.client.post<CreateLeadResponse>(
-      `/v1/${this.tenantId}/leads`,
+      `/v1/leads`,
       data
     );
     return response.data;
@@ -128,7 +128,7 @@ class ApiClient {
     message: string;
   }> {
     const response = await this.client.post(
-      `/v1/${this.tenantId}/properties/${propertyId}/leads/whatsapp`,
+      `/v1/properties/${propertyId}/leads/whatsapp`,
       data || {}
     );
     return response.data;
@@ -151,7 +151,7 @@ class ApiClient {
     message: string;
   }> {
     const response = await this.client.post(
-      `/v1/${this.tenantId}/properties/${propertyId}/leads/form`,
+      `/v1/properties/${propertyId}/leads/form`,
       data
     );
     return response.data;
@@ -202,14 +202,14 @@ class ApiClient {
   // Brokers
   async getBrokerPublicProfile(brokerId: string): Promise<Broker> {
     const response = await this.client.get<{ success: boolean; data: Broker }>(
-      `/v1/${this.tenantId}/brokers/${brokerId}/public`
+      `/v1/brokers/${brokerId}/public`
     );
     return response.data.data;
   }
 
   async getBrokerProperties(brokerId: string, limit: number = 20): Promise<Property[]> {
     const response = await this.client.get<{ success: boolean; data: Property[] }>(
-      `/v1/${this.tenantId}/brokers/${brokerId}/properties`,
+      `/v1/brokers/${brokerId}/properties`,
       {
         params: { limit }
       }
