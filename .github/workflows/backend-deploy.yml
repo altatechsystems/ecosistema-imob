@@ -153,7 +153,7 @@ jobs:
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=production,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_PROD }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_PROD }},GIN_MODE=release" \
+            --set-env-vars "ENVIRONMENT=production,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_PROD }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_PROD }},GIN_MODE=release,ALLOWED_ORIGINS=https://frontend-admin-altatech-systems.vercel.app,https://frontend-public-altatech-systems.vercel.app" \
             --project=${{ secrets.GCP_PROJECT_ID_PROD }}
 
       - name: Get service URL
