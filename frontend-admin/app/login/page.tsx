@@ -1,11 +1,56 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Home } from 'lucide-react';
 import { loginSchema } from '@/lib/validations';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginPage() {
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Only mount after client-side hydration
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // During SSR, show loading without calling useAuth
+  if (!isMounted) {
+    return <LoginPageSkeleton />;
+  }
+
+  // After mount, render actual login page with useAuth
+  return <LoginPageContent />;
+}
+
+// Loading skeleton shown during SSR
+function LoginPageSkeleton() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4">
+            <Home className="w-8 h-8 text-blue-600" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">
+            Admin Imobiliária
+          </h1>
+          <p className="text-blue-100">
+            Acesse o painel administrativo
+          </p>
+        </div>
+        <div className="bg-white rounded-lg shadow-xl p-8">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Carregando...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Actual login page content that uses useAuth (only rendered on client)
+function LoginPageContent() {
   const { login, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
