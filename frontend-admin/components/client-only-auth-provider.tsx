@@ -14,11 +14,19 @@ export function ClientOnlyAuthProvider({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, []);
 
-  // During SSR or initial render, don't render AuthProvider
+  // During SSR or initial render, show loading
+  // We can't render children without AuthProvider because they may use useAuth()
   if (!isMounted) {
-    return <>{children}</>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Inicializando...</p>
+        </div>
+      </div>
+    );
   }
 
-  // Only render AuthProvider after client-side mount
+  // Only render AuthProvider with children after client-side mount
   return <AuthProvider>{children}</AuthProvider>;
 }
