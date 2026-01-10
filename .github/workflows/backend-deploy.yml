@@ -77,7 +77,7 @@ jobs:
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --set-env-vars "ENVIRONMENT=development,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_DEV }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_DEV }},GIN_MODE=debug" \
+            --set-env-vars "ENVIRONMENT=development,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_DEV }},FIRESTORE_DATABASE=imob-dev,GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_DEV }},GIN_MODE=debug" \
             --project=${{ secrets.GCP_PROJECT_ID_DEV }}
 
       - name: Get service URL
@@ -153,7 +153,7 @@ jobs:
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
-            --update-env-vars "ENVIRONMENT=production,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_PROD }},GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_PROD }},GIN_MODE=release" \
+            --update-env-vars "ENVIRONMENT=production,FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID_PROD }},FIRESTORE_DATABASE=imob-prod,GCS_BUCKET_NAME=${{ secrets.GCS_BUCKET_NAME_PROD }},GIN_MODE=release" \
             --project=${{ secrets.GCP_PROJECT_ID_PROD }}
 
       - name: Get service URL
