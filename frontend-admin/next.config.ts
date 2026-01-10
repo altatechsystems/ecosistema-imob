@@ -7,11 +7,14 @@ const nextConfig: NextConfig = {
   },
 
   // CRITICAL: Hardcoded URLs to bypass Vercel environment variable cache issues
-  // These values override any cached builds that have incorrect placeholder values
-  env: {
-    NEXT_PUBLIC_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1',
-    NEXT_PUBLIC_ADMIN_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1/admin',
-  },
+  // Only use hardcoded URLs in production builds (not in development)
+  // In development (npm run dev), this will be undefined and .env.local will be used
+  ...(process.env.NODE_ENV === 'production' && {
+    env: {
+      NEXT_PUBLIC_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1',
+      NEXT_PUBLIC_ADMIN_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1/admin',
+    },
+  }),
 
   images: {
     remotePatterns: [

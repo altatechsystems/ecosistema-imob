@@ -53,6 +53,33 @@ func ExtractCRECIState(creci string) string {
 	return ""
 }
 
+// IsCRECIF checks if CRECI is Pessoa Física (individual)
+// Returns true if CRECI contains "-F/" (e.g., "12345-F/SP")
+func IsCRECIF(creci string) bool {
+	return strings.Contains(creci, "-F/")
+}
+
+// IsCRECIJ checks if CRECI is Pessoa Jurídica (legal entity)
+// Returns true if CRECI contains "-J/" (e.g., "67890-J/SP")
+func IsCRECIJ(creci string) bool {
+	return strings.Contains(creci, "-J/")
+}
+
+// ValidateCRECIType validates that CRECI matches expected type (F or J)
+// expectedType: "F" for Pessoa Física, "J" for Pessoa Jurídica
+func ValidateCRECIType(creci string, expectedType string) error {
+	if expectedType == "F" {
+		if !IsCRECIF(creci) {
+			return errors.New("CRECI deve ser Pessoa Física (formato: XXXXX-F/UF)")
+		}
+	} else if expectedType == "J" {
+		if !IsCRECIJ(creci) {
+			return errors.New("CRECI deve ser Pessoa Jurídica (formato: XXXXX-J/UF)")
+		}
+	}
+	return nil
+}
+
 // ============================================================================
 // Phone Number Validation (E.164 International Format)
 // ============================================================================

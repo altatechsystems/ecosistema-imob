@@ -10,6 +10,7 @@ import (
 
 	"firebase.google.com/go/v4/auth"
 	"github.com/altatech/ecosistema-imob/backend/internal/models"
+	"github.com/altatech/ecosistema-imob/backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"cloud.google.com/go/firestore"
@@ -29,15 +30,24 @@ func NewAuthHandler(firebaseAuth *auth.Client, firestoreDB *firestore.Client) *A
 
 // SignupRequest represents the signup payload
 type SignupRequest struct {
-	Email      string `json:"email" binding:"required,email"`
-	Password   string `json:"password" binding:"required,min=6"`
-	Name       string `json:"name" binding:"required"`
-	Phone      string `json:"phone" binding:"required"`
-	TenantName string `json:"tenant_name" binding:"required"`
+	// User information (administrador)
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
+	Name     string `json:"name" binding:"required"`
+	Phone    string `json:"phone" binding:"required"`
 
-	// PROMPT 10: Differentiate between brokers and administrative users
-	IsBroker bool   `json:"is_broker"` // true = create as broker, false = create as admin user
-	CRECI    string `json:"creci"`     // Required if is_broker=true
+	// Tenant information
+	TenantName string `json:"tenant_name" binding:"required"`
+	TenantType string `json:"tenant_type" binding:"required"` // "pf" or "pj"
+	Document   string `json:"document" binding:"required"`    // CPF or CNPJ
+
+	// PJ-specific fields
+	BusinessType string `json:"business_type,omitempty"` // Required if tenant_type == "pj"
+	TenantCRECI  string `json:"tenant_creci,omitempty"`  // Tenant-level CRECI
+
+	// User role selection
+	IsUserBroker bool   `json:"is_user_broker"` // Is the admin also a broker?
+	UserCRECI    string `json:"user_creci,omitempty"` // User's personal CRECI if is_user_broker=true
 }
 
 // SignupResponse represents the signup response
@@ -62,7 +72,7 @@ type LoginResponse struct {
 	IsPlatformAdmin bool                   `json:"is_platform_admin"`
 }
 
-// Signup creates a new tenant and admin broker
+// Signup creates a new tenant and admin broker or user
 func (h *AuthHandler) Signup(c *gin.Context) {
 	var req SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -72,14 +82,128 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// 1. Check if email already exists
+	// Normalize phone to E.164 format
+	req.Phone = utils.NormalizePhoneE164(req.Phone, "55")
+	if err := utils.ValidatePhoneE164(req.Phone); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Telefone inválido: " + err.Error()})
+		return
+	}
+
+	// 1. Validate tenant_type
+	if req.TenantType != "pf" && req.TenantType != "pj" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tenant_type must be 'pf' or 'pj'"})
+		return
+	}
+
+	// 2. FLUXO PF (Pessoa Física - Corretor Autônomo)
+	if req.TenantType == "pf" {
+		// 2a. Validar CPF
+		if err := utils.ValidateCPF(req.Document); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "CPF inválido: " + err.Error()})
+			return
+		}
+
+		// 2b. CRECI-F obrigatório
+		if req.TenantCRECI == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI-F é obrigatório para corretor autônomo"})
+			return
+		}
+
+		// 2c. Validar formato CRECI-F
+		if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI inválido: " + err.Error()})
+			return
+		}
+		if err := utils.ValidateCRECIType(req.TenantCRECI, "F"); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		// 2d. Fixar business_type e configurar broker
+		req.BusinessType = "corretor_autonomo"
+		req.IsUserBroker = true         // PF é sempre broker
+		req.UserCRECI = req.TenantCRECI // Mesmo CRECI
+	}
+
+	// 3. FLUXO PJ (Pessoa Jurídica)
+	if req.TenantType == "pj" {
+		// 3a. Validar CNPJ
+		if err := utils.ValidateCNPJ(req.Document); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "CNPJ inválido: " + err.Error()})
+			return
+		}
+
+		// 3b. Business type obrigatório
+		if req.BusinessType == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "business_type é obrigatório para PJ"})
+			return
+		}
+
+		validBusinessTypes := []string{"imobiliaria", "incorporadora", "construtora", "loteadora"}
+		isValid := false
+		for _, bt := range validBusinessTypes {
+			if req.BusinessType == bt {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "business_type inválido"})
+			return
+		}
+
+		// 3c. CRECI-J obrigatório APENAS para imobiliária
+		// IMPORTANTE: Incorporadoras, construtoras e loteadoras NÃO precisam de CRECI
+		// porque vendem seus próprios empreendimentos (não fazem intermediação de terceiros)
+		if req.BusinessType == "imobiliaria" {
+			if req.TenantCRECI == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI-J é obrigatório para imobiliária"})
+				return
+			}
+			if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI inválido: " + err.Error()})
+				return
+			}
+			if err := utils.ValidateCRECIType(req.TenantCRECI, "J"); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Imobiliária requer CRECI-J (Pessoa Jurídica)"})
+				return
+			}
+		}
+
+		// 3d. CRECI opcional para incorporadoras, construtoras e loteadoras
+		// (validar formato se fornecido)
+		if req.TenantCRECI != "" && req.BusinessType != "imobiliaria" {
+			if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI inválido: " + err.Error()})
+				return
+			}
+		}
+
+		// 3e. Validar CRECI do admin se broker
+		if req.IsUserBroker {
+			if req.UserCRECI == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI é obrigatório para corretores"})
+				return
+			}
+			if err := utils.ValidateCRECI(req.UserCRECI); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI do admin inválido: " + err.Error()})
+				return
+			}
+			if err := utils.ValidateCRECIType(req.UserCRECI, "F"); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Admin corretor precisa de CRECI-F individual"})
+				return
+			}
+		}
+	}
+
+	// 4. Check if email already exists
 	_, err := h.firebaseAuth.GetUserByEmail(ctx, req.Email)
 	if err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Email already registered"})
 		return
 	}
 
-	// 2. Create Firebase Auth user
+	// 5. Create Firebase Auth user
 	userParams := (&auth.UserToCreate{}).
 		Email(req.Email).
 		Password(req.Password).
@@ -93,19 +217,34 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	// 3. Create Tenant
+	// 6. Create Tenant
 	tenantID := uuid.New().String()
 	slug := generateSlug(req.TenantName)
 
+	// Determinar document_type
+	documentType := "cpf"
+	if req.TenantType == "pj" {
+		documentType = "cnpj"
+	}
+
+	now := time.Now()
 	tenant := models.Tenant{
-		ID:        tenantID,
-		Name:      req.TenantName,
-		Slug:      slug,
-		Email:     req.Email,
-		Phone:     req.Phone,
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+		ID:                    tenantID,
+		Name:                  req.TenantName,
+		Slug:                  slug,
+		TenantType:            req.TenantType,
+		Document:              req.Document,
+		DocumentType:          documentType,
+		BusinessType:          req.BusinessType,
+		CRECI:                 req.TenantCRECI,
+		Email:                 req.Email,
+		Phone:                 req.Phone,
+		SubscriptionPlan:      "full",
+		SubscriptionStatus:    "active",
+		SubscriptionStartedAt: &now,
+		IsActive:              true,
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
 
 	_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Set(ctx, tenant)
@@ -117,100 +256,89 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	// 4. PROMPT 10: Create either Broker or User based on is_broker flag
-	var entityID string
+	// 7. Create User (unified - no more separate brokers collection)
+	// All users go into /tenants/{id}/users collection
+	// Role determines if they are broker, admin, or both
+	userID := uuid.New().String()
+
+	// Determine role based on whether user is a broker
 	var role string
+	var creci string
+	var permissions []string
 
-	if req.IsBroker {
-		// Create as Broker (requires CRECI)
-		if req.CRECI == "" {
-			log.Printf("CRECI is required for broker signup")
-			// Rollback: delete tenant and Firebase user
-			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
-			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "CRECI is required for brokers"})
-			return
+	if req.IsUserBroker {
+		// User is a broker (has CRECI)
+		role = "broker_admin" // First broker is always admin too
+		creci = req.UserCRECI
+		permissions = []string{
+			"properties.view_all",
+			"properties.create",
+			"properties.edit_all",
+			"properties.delete",
+			"brokers.view",
+			"brokers.create",
+			"brokers.edit",
+			"users.view",
+			"users.create",
+			"users.edit",
+			"settings.view",
+			"settings.edit",
 		}
-
-		brokerID := uuid.New().String()
-		broker := models.Broker{
-			ID:          brokerID,
-			TenantID:    tenantID,
-			FirebaseUID: userRecord.UID,
-			Name:        req.Name,
-			Email:       req.Email,
-			Phone:       req.Phone,
-			CRECI:       req.CRECI,
-			Role:        "broker_admin", // First broker is broker_admin
-			IsActive:    true,
-			CreatedAt:   time.Now(),
-			UpdatedAt:   time.Now(),
-		}
-
-		_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("brokers").Doc(brokerID).Set(ctx, broker)
-		if err != nil {
-			log.Printf("Error creating broker: %v", err)
-			// Rollback: delete tenant and Firebase user
-			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
-			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create broker"})
-			return
-		}
-
-		entityID = brokerID
-		role = "broker_admin"
-		log.Printf("✅ Created broker with CRECI: %s", req.CRECI)
+		log.Printf("✅ Creating broker admin with CRECI: %s", req.UserCRECI)
 	} else {
-		// Create as User (administrative user without CRECI)
-		userID := uuid.New().String()
-		user := models.User{
-			ID:          userID,
-			TenantID:    tenantID,
-			FirebaseUID: userRecord.UID,
-			Name:        req.Name,
-			Email:       req.Email,
-			Phone:       req.Phone,
-			Role:        "admin", // First user is always admin
-			IsActive:    true,
-			Permissions: []string{
-				"properties.view_all",
-				"properties.create",
-				"properties.edit_all",
-				"properties.delete",
-				"brokers.view",
-				"brokers.create",
-				"brokers.edit",
-				"users.view",
-				"users.create",
-				"users.edit",
-				"settings.view",
-				"settings.edit",
-			},
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}
-
-		_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("users").Doc(userID).Set(ctx, user)
-		if err != nil {
-			log.Printf("Error creating user: %v", err)
-			// Rollback: delete tenant and Firebase user
-			h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
-			h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-			return
-		}
-
-		entityID = userID
+		// User is admin but not a broker
 		role = "admin"
-		log.Printf("✅ Created administrative user (no CRECI)")
+		creci = ""
+		permissions = []string{
+			"properties.view_all",
+			"properties.create",
+			"properties.edit_all",
+			"properties.delete",
+			"brokers.view",
+			"brokers.create",
+			"brokers.edit",
+			"users.view",
+			"users.create",
+			"users.edit",
+			"settings.view",
+			"settings.edit",
+		}
+		log.Printf("✅ Creating administrative user (no CRECI)")
 	}
 
-	// 5. Set custom claims
+	user := models.User{
+		ID:          userID,
+		TenantID:    tenantID,
+		FirebaseUID: userRecord.UID,
+		Name:        req.Name,
+		Email:       req.Email,
+		Phone:       req.Phone,
+		CRECI:       creci,
+		Role:        role,
+		IsActive:    true,
+		Permissions: permissions,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	_, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Collection("users").Doc(userID).Set(ctx, user)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		// Rollback: delete tenant and Firebase user
+		h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+		h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	entityID := userID
+
+	// 8. Set custom claims
 	claims := map[string]interface{}{
 		"tenant_id": tenantID,
 		"role":      role,
 		"broker_id": entityID, // For backwards compatibility
-		"user_id":   entityID, // For users
+		"user_id":   entityID,
 	}
 
 	err = h.firebaseAuth.SetCustomUserClaims(ctx, userRecord.UID, claims)
@@ -219,7 +347,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		// Continue anyway, claims can be set later
 	}
 
-	// 6. Generate custom token
+	// 9. Generate custom token
 	token, err := h.firebaseAuth.CustomToken(ctx, userRecord.UID)
 	if err != nil {
 		log.Printf("Error creating custom token: %v", err)
@@ -227,33 +355,28 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	// 7. Log activity
+	// 10. Log activity
 	go h.logActivity(ctx, tenantID, "tenant_created", map[string]interface{}{
-		"tenant_id":   tenantID,
-		"tenant_name": req.TenantName,
-		"admin_email": req.Email,
-		"is_broker":   req.IsBroker,
+		"tenant_type":   req.TenantType,
+		"business_type": req.BusinessType,
+		"has_creci":     req.TenantCRECI != "",
 	})
 
-	if req.IsBroker {
+	if req.IsUserBroker {
 		go h.logActivity(ctx, tenantID, "broker_created", map[string]interface{}{
-			"broker_id":    entityID,
-			"broker_email": req.Email,
-			"role":         role,
-			"creci":        req.CRECI,
+			"broker_id": entityID,
+			"creci":     req.UserCRECI,
 		})
 	} else {
 		go h.logActivity(ctx, tenantID, "user_created", map[string]interface{}{
-			"user_id":    entityID,
-			"user_email": req.Email,
-			"role":       role,
+			"user_id": entityID,
 		})
 	}
 
-	// 8. Return response
+	// 11. Return response
 	c.JSON(http.StatusCreated, SignupResponse{
 		TenantID:      tenantID,
-		BrokerID:      entityID, // For backwards compatibility, this contains either broker_id or user_id
+		BrokerID:      entityID, // For backwards compatibility
 		FirebaseToken: token,
 		User: map[string]interface{}{
 			"uid":   userRecord.UID,

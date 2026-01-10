@@ -5,9 +5,13 @@ import (
 	"time"
 )
 
-// User represents an administrative user (NOT a real estate broker)
+// User represents a system user (can be admin, manager, broker, or broker_admin)
 // Collection: /tenants/{tenantId}/users/{userId}
-// Users are administrators who manage the system but are NOT brokers with CRECI
+// Users can have different roles:
+// - "admin": Administrator without CRECI
+// - "manager": Manager without CRECI
+// - "broker": Real estate broker with CRECI
+// - "broker_admin": Broker with CRECI who is also tenant administrator
 type User struct {
 	ID       string `firestore:"-" json:"id"`
 	TenantID string `firestore:"tenant_id" json:"tenant_id"`
@@ -24,9 +28,12 @@ type User struct {
 	Document     string `firestore:"document,omitempty" json:"document,omitempty"`           // CPF ou CNPJ
 	DocumentType string `firestore:"document_type,omitempty" json:"document_type,omitempty"` // "cpf" ou "cnpj"
 
+	// CRECI (optional - only for users who are also brokers)
+	CRECI string `firestore:"creci,omitempty" json:"creci,omitempty"` // Format: "XXXXX-F/UF"
+
 	// Role and status
-	// Valid roles: "admin", "manager" (NOT broker roles)
-	Role     string `firestore:"role,omitempty" json:"role,omitempty"` // "admin", "manager"
+	// Valid roles: "admin", "manager", "broker", "broker_admin"
+	Role     string `firestore:"role,omitempty" json:"role,omitempty"` // "admin", "manager", "broker", "broker_admin"
 	IsActive bool   `firestore:"is_active" json:"is_active"`
 
 	// Permissions (array of permission strings)
@@ -121,9 +128,9 @@ func (u *User) RemovePermission(permission string) {
 	}
 }
 
-// ValidRoles returns the list of valid roles for admin users
+// ValidRoles returns the list of valid roles for users
 func ValidUserRoles() []string {
-	return []string{"admin", "manager"}
+	return []string{"admin", "manager", "broker", "broker_admin"}
 }
 
 // IsValidRole checks if a role is valid for admin users

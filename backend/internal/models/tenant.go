@@ -14,6 +14,7 @@ type Tenant struct {
 	Phone string `firestore:"phone,omitempty" json:"phone,omitempty"`
 
 	// Business information
+	TenantType   string `firestore:"tenant_type,omitempty" json:"tenant_type,omitempty"`     // "pf" or "pj"
 	Document     string `firestore:"document,omitempty" json:"document,omitempty"`           // CPF or CNPJ
 	DocumentType string `firestore:"document_type,omitempty" json:"document_type,omitempty"` // "cpf" or "cnpj"
 	BusinessType string `firestore:"business_type,omitempty" json:"business_type,omitempty"` // imobiliaria, incorporadora, loteadora, construtora, corretor_autonomo
@@ -33,6 +34,12 @@ type Tenant struct {
 	Settings        map[string]interface{} `firestore:"settings,omitempty" json:"settings,omitempty"`
 	IsActive        bool                   `firestore:"is_active" json:"is_active"`
 	IsPlatformAdmin bool                   `firestore:"is_platform_admin,omitempty" json:"is_platform_admin,omitempty"`
+
+	// Subscription
+	SubscriptionPlan      string     `firestore:"subscription_plan,omitempty" json:"subscription_plan,omitempty"`           // "free", "full"
+	SubscriptionStatus    string     `firestore:"subscription_status,omitempty" json:"subscription_status,omitempty"`       // "active", "trial", "expired", "cancelled"
+	TrialEndsAt           *time.Time `firestore:"trial_ends_at,omitempty" json:"trial_ends_at,omitempty"`                   // Trial end date
+	SubscriptionStartedAt *time.Time `firestore:"subscription_started_at,omitempty" json:"subscription_started_at,omitempty"` // Subscription start date
 
 	// Metadata
 	CreatedAt time.Time `firestore:"created_at" json:"created_at"`

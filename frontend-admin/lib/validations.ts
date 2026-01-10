@@ -27,16 +27,63 @@ export type UserFormData = z.infer<typeof userSchema>;
 
 // Signup validation
 export const signupSchema = z.object({
+  // Tenant Type
+  tenant_type: z.enum(['pf', 'pj'], {
+    message: 'Selecione o tipo de negócio'
+  }),
+
+  // Tenant Info
+  tenant_name: z.string().min(1, 'Nome é obrigatório'),
+  document: z.string().min(11, 'CPF/CNPJ inválido'),
+  business_type: z.enum([
+    'corretor_autonomo',
+    'imobiliaria',
+    'incorporadora',
+    'construtora',
+    'loteadora'
+  ]).optional(),
+  tenant_creci: z.string().optional(),
+
+  // Admin Info
   name: z.string().min(1, 'Nome completo é obrigatório'),
   email: z.string().email('Email válido é obrigatório'),
   password: z.string()
     .min(6, 'Senha deve ter no mínimo 6 caracteres')
-    .regex(/[A-Z]/, 'Senha deve conter ao menos uma letra maiúscula')
-    .regex(/[a-z]/, 'Senha deve conter ao menos uma letra minúscula')
-    .regex(/[0-9]/, 'Senha deve conter ao menos um número'),
-  phone: z.string().optional(),
-  document: z.string().optional(),
-  tenant_name: z.string().min(1, 'Nome da imobiliária é obrigatório'),
+    .regex(/[A-Z]/, 'Deve conter maiúscula')
+    .regex(/[a-z]/, 'Deve conter minúscula')
+    .regex(/[0-9]/, 'Deve conter número'),
+  phone: z.string().min(10, 'Telefone inválido'),
+  is_user_broker: z.boolean(),
+  user_creci: z.string().optional(),
+}).refine((data) => {
+  // PF: tenant_creci obrigatório
+  if (data.tenant_type === 'pf' && !data.tenant_creci) {
+    return false;
+  }
+
+  // PF: business_type = corretor_autonomo
+  if (data.tenant_type === 'pf' && data.business_type !== 'corretor_autonomo') {
+    return false;
+  }
+
+  // PJ: business_type obrigatório
+  if (data.tenant_type === 'pj' && !data.business_type) {
+    return false;
+  }
+
+  // PJ imobiliaria: tenant_creci obrigatório
+  if (data.tenant_type === 'pj' && data.business_type === 'imobiliaria' && !data.tenant_creci) {
+    return false;
+  }
+
+  // is_user_broker: user_creci obrigatório
+  if (data.is_user_broker && !data.user_creci) {
+    return false;
+  }
+
+  return true;
+}, {
+  message: 'Configuração inválida',
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
