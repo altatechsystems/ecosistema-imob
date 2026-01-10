@@ -13,6 +13,7 @@ type Config struct {
 	// Firebase configuration
 	FirebaseProjectID   string
 	FirebaseCredentials string
+	FirestoreDatabase   string
 	GCSBucketName       string
 
 	// Server configuration
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		// Firebase
 		FirebaseProjectID:   getEnv("FIREBASE_PROJECT_ID", ""),
 		FirebaseCredentials: getEnv("GOOGLE_APPLICATION_CREDENTIALS", "./config/firebase-adminsdk.json"),
+		FirestoreDatabase:   getEnv("FIRESTORE_DATABASE", "imob-dev"),
 		GCSBucketName:       getEnv("GCS_BUCKET_NAME", ""),
 
 		// Server

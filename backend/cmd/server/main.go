@@ -117,13 +117,13 @@ func initializeFirebase(ctx context.Context, cfg *config.Config) (*firebase.App,
 		return nil, nil, nil, fmt.Errorf("failed to initialize Firebase Auth: %w", err)
 	}
 
-	// Initialize Firestore client with named database "imob-dev" (where the data is stored)
-	log.Println("Connecting to Firestore database: imob-dev")
-	firestoreClient, err := firestore.NewClientWithDatabase(ctx, cfg.FirebaseProjectID, "imob-dev", opt)
+	// Initialize Firestore client with named database from config
+	log.Printf("Connecting to Firestore database: %s", cfg.FirestoreDatabase)
+	firestoreClient, err := firestore.NewClientWithDatabase(ctx, cfg.FirebaseProjectID, cfg.FirestoreDatabase, opt)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to initialize Firestore: %w", err)
 	}
-	log.Println("✅ Connected to Firestore database: imob-dev")
+	log.Printf("✅ Connected to Firestore database: %s", cfg.FirestoreDatabase)
 
 	return app, authClient, firestoreClient, nil
 }
