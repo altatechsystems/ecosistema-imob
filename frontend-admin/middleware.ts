@@ -2,8 +2,6 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(request: NextRequest) {
-  console.log('[Middleware] Processing request:', request.nextUrl.pathname);
-
   try {
     const response = NextResponse.next();
 
@@ -51,11 +49,9 @@ export function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=()'
   );
 
-    console.log('[Middleware] Request processed successfully');
     return response;
   } catch (error) {
-    console.error('[Middleware] ❌ Error:', error);
-    // Return a simple response to avoid middleware failure
+    // Silent failure - just pass through without headers
     return NextResponse.next();
   }
 }
