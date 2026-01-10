@@ -6,11 +6,11 @@ const nextConfig: NextConfig = {
     return `build-${Date.now()}`;
   },
 
-  // CRITICAL: Define environment variables inline as fallback
-  // This ensures they're available even if Vercel's env var injection fails
+  // CRITICAL: Hardcoded URLs to bypass Vercel environment variable cache issues
+  // These values override any cached builds that have incorrect placeholder values
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1',
-    NEXT_PUBLIC_ADMIN_API_URL: process.env.NEXT_PUBLIC_ADMIN_API_URL || 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1/admin',
+    NEXT_PUBLIC_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1',
+    NEXT_PUBLIC_ADMIN_API_URL: 'https://backend-api-333057134750.southamerica-east1.run.app/api/v1/admin',
   },
 
   images: {
