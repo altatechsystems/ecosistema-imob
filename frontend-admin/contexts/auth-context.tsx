@@ -13,6 +13,7 @@ import { User } from '@/types/user';
 import { Tenant } from '@/types/tenant';
 import { api } from '@/lib/api';
 
+// Production API URL is set via NEXT_PUBLIC_API_URL environment variable
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 interface AuthContextValue {
