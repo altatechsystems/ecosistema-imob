@@ -133,7 +133,10 @@ export function SignupForm({
           : undefined;
       }
 
-      console.log('Payload being sent:', payload);
+      // Sensitive data - only log in development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Payload being sent:', payload);
+      }
 
       // 1. Criar tenant e usuário no backend
       const signupResponse = await axios.post(

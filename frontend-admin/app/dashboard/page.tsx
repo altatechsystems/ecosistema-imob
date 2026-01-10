@@ -5,6 +5,7 @@ import { adminApi } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useTenant } from '@/contexts/tenant-context';
 import { formatCurrency, formatNumber } from '@/lib/utils';
+import { logger } from '@/lib/logger';
 import {
   Building2,
   MessageSquare,
@@ -39,7 +40,7 @@ export default function DashboardPage() {
 
   const loadMetrics = useCallback(async () => {
     if (!effectiveTenantId) {
-      console.error('Tenant ID não encontrado no contexto');
+      logger.error('Tenant ID não encontrado no contexto');
       setLoading(false);
       return;
     }
@@ -47,7 +48,7 @@ export default function DashboardPage() {
     // Se for tenant_master e não tiver tenant selecionado, não buscar métricas
     // (tenant_master não tem imóveis próprios)
     if (effectiveTenantId === 'tenant_master' && !selectedTenantId) {
-      console.log('[Dashboard] tenant_master selected but no specific tenant chosen, skipping metrics load');
+      logger.dev('[Dashboard] tenant_master selected but no specific tenant chosen, skipping metrics load');
       setMetrics({
         total_properties: 0,
         available_properties: 0,
@@ -65,7 +66,7 @@ export default function DashboardPage() {
 
     // Evitar múltiplas chamadas simultâneas usando ref
     if (isLoadingRef.current) {
-      console.log('[Dashboard] Already loading metrics, skipping...');
+      logger.dev('[Dashboard] Already loading metrics, skipping...');
       return;
     }
 
@@ -81,7 +82,7 @@ export default function DashboardPage() {
     try {
       isLoadingRef.current = true;
       setLoading(true);
-      console.log('[Dashboard] Using tenant_id:', effectiveTenantId);
+      logger.dev('[Dashboard] Using tenant_id:', effectiveTenantId);
 
       // Fazer todas as requests em PARALELO para evitar erro 429
       const [propertiesData, availableData, soldData, rentedData] = await Promise.all([
@@ -104,7 +105,7 @@ export default function DashboardPage() {
         return;
       }
 
-      console.log('[Dashboard] Received data:', {
+      logger.dev('[Dashboard] Received data:', {
         properties: propertiesData.total,
         available: availableData.total,
         sold: soldData.total,
@@ -125,10 +126,10 @@ export default function DashboardPage() {
     } catch (error) {
       // Ignorar erros de abort
       if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[Dashboard] Request aborted');
+        logger.dev('[Dashboard] Request aborted');
         return;
       }
-      console.error('Failed to load metrics:', error);
+      logger.error('Failed to load metrics:', error);
     } finally {
       isLoadingRef.current = false;
       setLoading(false);
