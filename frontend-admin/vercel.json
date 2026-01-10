@@ -1,0 +1,4 @@
+{
+  "buildCommand": "rm -rf .next && rm -rf .vercel && next build",
+  "installCommand": "npm install"
+}
