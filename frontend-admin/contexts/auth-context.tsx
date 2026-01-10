@@ -171,6 +171,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Login function
   const login = async (email: string, password: string) => {
     console.log('[AuthProvider] Login attempt:', email);
+    console.log('[AuthProvider] API_URL:', API_URL);
+    console.log('[AuthProvider] NEXT_PUBLIC_API_URL:', process.env.NEXT_PUBLIC_API_URL);
 
     // Ensure we're on client side
     if (typeof window === 'undefined') {
