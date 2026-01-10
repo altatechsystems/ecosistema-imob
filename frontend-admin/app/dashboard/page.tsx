@@ -137,12 +137,17 @@ export default function DashboardPage() {
   }, [effectiveTenantId]);
 
   useEffect(() => {
-    if (effectiveTenantId) {
-      loadMetrics();
-    }
+    // Debounce: aguardar um pequeno delay antes de carregar métricas
+    // Isso evita múltiplas requisições quando o componente renderiza várias vezes rapidamente (React Strict Mode)
+    const timeoutId = setTimeout(() => {
+      if (effectiveTenantId) {
+        loadMetrics();
+      }
+    }, 150); // 150ms de delay para evitar requisições duplicadas
 
-    // Cleanup: cancelar requisições pendentes quando o componente for desmontado ou tenant mudar
+    // Cleanup: cancelar timeout e requisições pendentes quando o componente for desmontado ou tenant mudar
     return () => {
+      clearTimeout(timeoutId);
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
