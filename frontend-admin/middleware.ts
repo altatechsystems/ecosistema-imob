@@ -27,19 +27,17 @@ export function middleware(request: NextRequest) {
   }
 
   // Content-Security-Policy: Prevent XSS and other injection attacks
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-  const adminApiUrl = process.env.NEXT_PUBLIC_ADMIN_API_URL || 'http://localhost:8080/api/v1/admin';
-  const cspHeader = `
-    default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: https: blob:;
-    font-src 'self' data:;
-    connect-src 'self' http://localhost:8080 http://localhost:8080/api/v1 https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firebaseio.com https://identitytoolkit.googleapis.com https://*.run.app ${apiUrl} ${adminApiUrl};
-    frame-ancestors 'none';
-    base-uri 'self';
-    form-action 'self';
-  `.replace(/\s{2,}/g, ' ').trim();
+  const cspHeader = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' http://localhost:8080 https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.run.app",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; ');
 
   response.headers.set('Content-Security-Policy', cspHeader);
 
