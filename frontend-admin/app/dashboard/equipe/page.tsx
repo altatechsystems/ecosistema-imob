@@ -4,18 +4,39 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { User, getRoleDisplayName, hasPermission, STANDARD_PERMISSIONS } from '@/types/user';
-import { Plus, UserCog, Trash2, Shield, ShieldOff, MoreVertical, Mail, Phone, FileText } from 'lucide-react';
+import { Plus, UserCog, Trash2, Shield, ShieldOff, MoreVertical, Mail, Phone, FileText, Clock, X, Send } from 'lucide-react';
+
+interface Invitation {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  role: string;
+  permissions?: string[];
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  invited_by_uid: string;
+  invited_by_name?: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at?: string;
+}
 
 export default function EquipePage() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'users' | 'invitations'>('users');
   const [users, setUsers] = useState<User[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showActiveOnly, setShowActiveOnly] = useState(false);
 
   useEffect(() => {
-    loadUsers();
-  }, [showActiveOnly]);
+    if (activeTab === 'users') {
+      loadUsers();
+    } else {
+      loadInvitations();
+    }
+  }, [showActiveOnly, activeTab]);
 
   const loadUsers = async () => {
     try {
@@ -113,6 +134,113 @@ export default function EquipePage() {
     }
   };
 
+  const loadInvitations = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const tenantId = localStorage.getItem('tenant_id');
+      if (!tenantId) {
+        setError('Tenant ID não encontrado');
+        setLoading(false);
+        return;
+      }
+
+      const { auth } = await import('@/lib/firebase');
+      const user = auth.currentUser;
+
+      if (!user) {
+        console.error('Usuário não autenticado');
+        router.push('/login');
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      const apiUrl = process.env.NEXT_PUBLIC_ADMIN_API_URL || `${process.env.NEXT_PUBLIC_API_URL}/admin`;
+      const url = `${apiUrl}/${tenantId}/users/invitations`;
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao buscar convites');
+      }
+
+      const data = await response.json();
+      console.log('[DEV] Invitations data:', data);
+      // Ensure data is an array
+      const invitationsArray = Array.isArray(data) ? data : (data?.invitations || []);
+      setInvitations(invitationsArray);
+    } catch (err: any) {
+      console.error('Error loading invitations:', err);
+      setError(err.message || 'Erro ao carregar convites');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!confirm('Tem certeza que deseja cancelar este convite?')) {
+      return;
+    }
+
+    try {
+      const tenantId = localStorage.getItem('tenant_id');
+      if (!tenantId) {
+        alert('Tenant ID não encontrado');
+        return;
+      }
+
+      const { auth } = await import('@/lib/firebase');
+      const user = auth.currentUser;
+
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      const apiUrl = process.env.NEXT_PUBLIC_ADMIN_API_URL || `${process.env.NEXT_PUBLIC_API_URL}/admin`;
+      const url = `${apiUrl}/${tenantId}/users/invitations/${invitationId}`;
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Erro ao cancelar convite');
+      }
+
+      await loadInvitations();
+    } catch (err: any) {
+      console.error('Error cancelling invitation:', err);
+      alert(err.message || 'Erro ao cancelar convite');
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const isExpired = (expiresAt: string) => {
+    return new Date(expiresAt) < new Date();
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -164,6 +292,50 @@ export default function EquipePage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`
+                py-4 px-1 border-b-2 font-medium text-sm
+                ${activeTab === 'users'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }
+              `}
+            >
+              <div className="flex items-center gap-2">
+                <UserCog className="w-5 h-5" />
+                <span>Usuários Ativos</span>
+                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                  {users.length}
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('invitations')}
+              className={`
+                py-4 px-1 border-b-2 font-medium text-sm
+                ${activeTab === 'invitations'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }
+              `}
+            >
+              <div className="flex items-center gap-2">
+                <Send className="w-5 h-5" />
+                <span>Convites Pendentes</span>
+                <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                  {invitations.filter(inv => inv.status === 'pending').length}
+                </span>
+              </div>
+            </button>
+          </nav>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="mb-4 md:mb-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <label className="flex items-center gap-2 cursor-pointer">
@@ -187,28 +359,30 @@ export default function EquipePage() {
         </div>
       )}
 
-      {/* Users List */}
-      {users.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <UserCog className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
-            Nenhum usuário encontrado
-          </h3>
-          <p className="text-sm md:text-base text-gray-600 mb-4 px-4">
-            {showActiveOnly
-              ? 'Não há usuários ativos no momento.'
-              : 'Comece adicionando o primeiro usuário da equipe.'}
-          </p>
-          <button
-            onClick={() => router.push('/dashboard/equipe/novo')}
-            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-          >
-            <Plus className="w-5 h-5" />
-            Adicionar Usuário
-          </button>
-        </div>
-      ) : (
+      {/* Users Tab Content */}
+      {activeTab === 'users' && (
         <>
+          {users.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <UserCog className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
+                Nenhum usuário encontrado
+              </h3>
+              <p className="text-sm md:text-base text-gray-600 mb-4 px-4">
+                {showActiveOnly
+                  ? 'Não há usuários ativos no momento.'
+                  : 'Comece adicionando o primeiro usuário da equipe.'}
+              </p>
+              <button
+                onClick={() => router.push('/dashboard/equipe/novo')}
+                className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                <Plus className="w-5 h-5" />
+                Adicionar Usuário
+              </button>
+            </div>
+          ) : (
+            <>
           {/* Mobile Card View */}
           <div className="md:hidden space-y-4">
             {users.map((user) => (
@@ -435,6 +609,224 @@ export default function EquipePage() {
               </table>
             </div>
           </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Invitations Tab Content */}
+      {activeTab === 'invitations' && (
+        <>
+          {invitations.length === 0 ? (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <Send className="w-12 h-12 md:w-16 md:h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-base md:text-lg font-semibold text-gray-900 mb-2">
+                Nenhum convite pendente
+              </h3>
+              <p className="text-sm md:text-base text-gray-600 mb-4 px-4">
+                Todos os convites foram aceitos ou não há convites enviados.
+              </p>
+              <button
+                onClick={() => router.push('/dashboard/equipe/novo')}
+                className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+              >
+                <Plus className="w-5 h-5" />
+                Convidar Membro
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-4">
+                {invitations.map((invitation) => {
+                  const expired = isExpired(invitation.expires_at);
+                  return (
+                    <div key={invitation.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                      {/* Invitation Header */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="text-base font-semibold text-gray-900">
+                            {invitation.name}
+                          </h3>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                invitation.role === 'admin'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {getRoleDisplayName(invitation.role)}
+                            </span>
+                            {expired ? (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                Expirado
+                              </span>
+                            ) : invitation.status === 'pending' ? (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                Pendente
+                              </span>
+                            ) : (
+                              <span className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                {invitation.status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Invitation Details */}
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-start gap-2 text-sm">
+                          <Mail className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                          <span className="text-gray-700 break-all">{invitation.email}</span>
+                        </div>
+                        {invitation.phone && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-700">{invitation.phone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-700">
+                            Enviado em {formatDate(invitation.created_at)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className={expired ? 'text-red-600 font-medium' : 'text-gray-700'}>
+                            Expira em {formatDate(invitation.expires_at)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      {invitation.status === 'pending' && !expired && (
+                        <div className="flex gap-2 pt-3 border-t border-gray-100">
+                          <button
+                            onClick={() => handleCancelInvitation(invitation.id)}
+                            className="flex-1 bg-red-50 text-red-700 px-4 py-2 rounded-lg hover:bg-red-100 transition font-medium text-sm"
+                          >
+                            Cancelar Convite
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block bg-white rounded-lg shadow overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Convidado
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Contato
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Perfil
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Enviado em
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Expira em
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {invitations.map((invitation) => {
+                        const expired = isExpired(invitation.expires_at);
+                        return (
+                          <tr key={invitation.id} className="hover:bg-gray-50">
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="flex-shrink-0 h-10 w-10">
+                                  <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                    <span className="text-gray-600 font-medium">
+                                      {invitation.name.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {invitation.name}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900">{invitation.email}</div>
+                              <div className="text-sm text-gray-500">
+                                {invitation.phone || 'Sem telefone'}
+                              </div>
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  invitation.role === 'admin'
+                                    ? 'bg-purple-100 text-purple-800'
+                                    : 'bg-blue-100 text-blue-800'
+                                }`}
+                              >
+                                {getRoleDisplayName(invitation.role)}
+                              </span>
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(invitation.created_at)}
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={expired ? 'text-red-600 font-medium' : 'text-gray-500'}>
+                                {formatDate(invitation.expires_at)}
+                              </span>
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                              {expired ? (
+                                <span className="inline-flex px-2 text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                  Expirado
+                                </span>
+                              ) : invitation.status === 'pending' ? (
+                                <span className="inline-flex px-2 text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                                  Pendente
+                                </span>
+                              ) : (
+                                <span className="inline-flex px-2 text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                  {invitation.status}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                              {invitation.status === 'pending' && !expired && (
+                                <button
+                                  onClick={() => handleCancelInvitation(invitation.id)}
+                                  className="text-red-600 hover:text-red-900 flex items-center gap-1 ml-auto"
+                                >
+                                  <X className="w-4 h-4" />
+                                  Cancelar
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

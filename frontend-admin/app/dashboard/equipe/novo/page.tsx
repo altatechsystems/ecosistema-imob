@@ -3,23 +3,21 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserRole, STANDARD_PERMISSIONS, getRoleDisplayName } from '@/types/user';
-import { ArrowLeft, Save, Shield, UserCog, UserPlus } from 'lucide-react';
-import { userSchema } from '@/lib/validations';
+import { ArrowLeft, Send, Shield, Mail, UserPlus } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
-export default function NewUserPage() {
+export default function InviteUserPage() {
   const router = useRouter();
-  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const [formData, setFormData] = useState({
-    firebase_uid: '',
     name: '',
     email: '',
     phone: '',
-    document: '',
-    document_type: 'cpf' as 'cpf' | 'cnpj',
     role: 'manager' as UserRole,
-    is_active: true,
+    creci: '',
     permissions: [] as string[],
   });
 
@@ -27,11 +25,8 @@ export default function NewUserPage() {
     e.preventDefault();
 
     try {
-      setSaving(true);
+      setSending(true);
       setError(null);
-
-      // Validate form data with Zod
-      const validatedData = userSchema.parse(formData);
 
       const tenantId = localStorage.getItem('tenant_id');
       if (!tenantId) {
@@ -43,11 +38,36 @@ export default function NewUserPage() {
 
       if (!currentUser) {
         router.push('/login');
-        return;
+        return
+;
       }
 
       const token = await currentUser.getIdToken(true);
-      const url = `${process.env.NEXT_PUBLIC_API_URL}/admin/${tenantId}/users`;
+      const apiUrl = process.env.NEXT_PUBLIC_ADMIN_API_URL || `${process.env.NEXT_PUBLIC_API_URL}/admin`;
+      const url = `${apiUrl}/${tenantId}/users/invite`;
+
+      // Build payload
+      const payload: any = {
+        email: formData.email,
+        name: formData.name,
+        phone: formData.phone || undefined,
+        role: formData.role,
+      };
+
+      // Add CRECI if role is broker or broker_admin
+      if (formData.role === 'broker' || formData.role === 'broker_admin') {
+        if (!formData.creci) {
+          throw new Error('CRECI é obrigatório para corretores');
+        }
+        payload.creci = formData.creci;
+      }
+
+      // Add permissions for manager role
+      if (formData.role === 'manager') {
+        payload.permissions = formData.permissions;
+      }
+
+      logger.dev('Sending invitation:', payload);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -55,25 +75,27 @@ export default function NewUserPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(validatedData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Erro ao criar usuário');
+        throw new Error(errorData.error || 'Erro ao enviar convite');
       }
 
-      // Sucesso - redirecionar para lista
-      router.push('/dashboard/equipe');
+      const data = await response.json();
+      logger.dev('Invitation sent:', data);
+
+      // Success
+      setSuccess(true);
+      setTimeout(() => {
+        router.push('/dashboard/equipe');
+      }, 2000);
     } catch (err: any) {
-      if (err.errors) {
-        // Zod validation error
-        setError(err.errors[0]?.message || 'Dados inválidos');
-      } else {
-        setError(err.message || 'Erro ao criar usuário');
-      }
+      logger.error('Error sending invitation:', err);
+      setError(err.message || 'Erro ao enviar convite');
     } finally {
-      setSaving(false);
+      setSending(false);
     }
   };
 
@@ -157,6 +179,41 @@ export default function NewUserPage() {
     },
   ];
 
+  if (success) {
+    return (
+      <div className="container mx-auto px-4 py-6 md:py-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-green-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-green-900 mb-2">
+              Convite Enviado!
+            </h2>
+            <p className="text-green-800">
+              Um email foi enviado para <strong>{formData.email}</strong> com instruções para aceitar o convite e criar a conta.
+            </p>
+            <p className="text-sm text-green-700 mt-4">
+              Redirecionando para a lista de equipe...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-6 md:py-8">
       {/* Header */}
@@ -169,30 +226,29 @@ export default function NewUserPage() {
           Voltar para Equipe
         </button>
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-            <UserPlus className="w-6 h-6 text-blue-600" />
+          <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+            <Mail className="w-6 h-6 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">Novo Usuário</h1>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900">Convidar Membro</h1>
             <p className="text-sm md:text-base text-gray-600 mt-1">
-              Adicione um novo usuário administrativo à equipe
+              Envie um convite por email para adicionar um novo membro à equipe
             </p>
           </div>
         </div>
       </div>
 
       {/* Info Notice */}
-      <div className="mb-4 md:mb-6 bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
+      <div className="mb-4 md:mb-6 bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4">
         <div className="flex items-start gap-3">
-          <Shield className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <Shield className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="text-sm md:text-base font-semibold text-blue-900 mb-1">
-              Importante: Autenticação Firebase
+            <h3 className="text-sm md:text-base font-semibold text-purple-900 mb-1">
+              Como Funciona
             </h3>
-            <p className="text-xs md:text-sm text-blue-800">
-              Antes de criar o usuário aqui, você precisa criar a conta dele no{' '}
-              <strong>Firebase Authentication</strong> e obter o <strong>Firebase UID</strong>.
-              Este UID é necessário para vincular o usuário administrativo à conta de autenticação.
+            <p className="text-xs md:text-sm text-purple-800">
+              O novo membro receberá um email com um link para aceitar o convite e criar sua senha.
+              O convite expira em <strong>7 dias</strong>.
             </p>
           </div>
         </div>
@@ -207,33 +263,10 @@ export default function NewUserPage() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4 md:space-y-6">
-        {/* Firebase Authentication */}
-        <div className="bg-white rounded-lg shadow p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
-            Autenticação Firebase
-          </h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Firebase UID *
-            </label>
-            <input
-              type="text"
-              value={formData.firebase_uid}
-              onChange={(e) => setFormData({ ...formData, firebase_uid: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Ex: 1a2b3c4d5e6f7g8h9i0j..."
-              required
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              O UID único do usuário no Firebase Authentication
-            </p>
-          </div>
-        </div>
-
         {/* Basic Information */}
         <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
-            Informações Básicas
+            Informações do Convidado
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -244,7 +277,8 @@ export default function NewUserPage() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Ex: João Silva"
                 required
               />
             </div>
@@ -256,129 +290,181 @@ export default function NewUserPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="email@exemplo.com"
                 required
               />
+              <p className="mt-1 text-xs text-gray-500">
+                O convite será enviado para este email
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Telefone
+                Telefone (opcional)
               </label>
               <input
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="(00) 00000-0000"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Documento (CPF/CNPJ)
-              </label>
-              <input
-                type="text"
-                value={formData.document}
-                onChange={(e) => setFormData({ ...formData, document: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="000.000.000-00"
               />
             </div>
           </div>
         </div>
 
-        {/* Role and Status */}
+        {/* Role and Permissions */}
         <div className="bg-white rounded-lg shadow p-4 md:p-6">
           <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">
-            Perfil e Status
+            Perfil e Acesso
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Perfil *
-              </label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              >
-                <option value="admin">
-                  {getRoleDisplayName('admin')} - Acesso total
-                </option>
-                <option value="manager">
-                  {getRoleDisplayName('manager')} - Permissões específicas
-                </option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
-              <div className="flex items-center gap-4 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={formData.is_active}
-                    onChange={() => setFormData({ ...formData, is_active: true })}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-sm text-gray-700">Ativo</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={!formData.is_active}
-                    onChange={() => setFormData({ ...formData, is_active: false })}
-                    className="w-4 h-4 text-blue-600"
-                  />
-                  <span className="text-sm text-gray-700">Inativo</span>
-                </label>
-              </div>
-            </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Função *
+            </label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole, creci: '' })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              required
+            >
+              <option value="admin">
+                {getRoleDisplayName('admin')} - Acesso total ao sistema
+              </option>
+              <option value="manager">
+                {getRoleDisplayName('manager')} - Permissões específicas
+              </option>
+              <option value="broker">
+                {getRoleDisplayName('broker')} - Corretor (requer CRECI)
+              </option>
+              <option value="broker_admin">
+                {getRoleDisplayName('broker_admin')} - Corretor Administrador (requer CRECI)
+              </option>
+            </select>
           </div>
+
+          {/* CRECI field for broker roles */}
+          {(formData.role === 'broker' || formData.role === 'broker_admin') && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                CRECI *
+              </label>
+              <input
+                type="text"
+                value={formData.creci}
+                onChange={(e) => setFormData({ ...formData, creci: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Ex: 12345-F/SP"
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Formato: XXXXX-F/UF (F para pessoa física)
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Permissions - Only for Manager */}
         {formData.role === 'manager' && (
           <div className="bg-white rounded-lg shadow p-4 md:p-6">
-            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-2">
-              Permissões
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+                Permissões
+              </h2>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allPermissions = permissionGroups.flatMap((group) =>
+                      group.permissions.map((p) => p.key)
+                    );
+                    setFormData({ ...formData, permissions: allPermissions });
+                  }}
+                  className="text-xs md:text-sm px-3 py-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition font-medium"
+                >
+                  Selecionar Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, permissions: [] })}
+                  className="text-xs md:text-sm px-3 py-1.5 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition font-medium"
+                >
+                  Limpar Seleção
+                </button>
+              </div>
+            </div>
             <p className="text-xs md:text-sm text-gray-600 mb-4">
               Selecione as permissões específicas para este gerente
             </p>
             <div className="space-y-6">
-              {permissionGroups.map((group) => (
-                <div key={group.title}>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                    {group.title}
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {group.permissions.map((permission) => (
-                      <label
-                        key={permission.key}
-                        className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+              {permissionGroups.map((group) => {
+                const groupPermissions = group.permissions.map((p) => p.key);
+                const allSelected = groupPermissions.every((p) =>
+                  formData.permissions.includes(p)
+                );
+                const noneSelected = groupPermissions.every(
+                  (p) => !formData.permissions.includes(p)
+                );
+
+                return (
+                  <div key={group.title}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        {group.title}
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (allSelected) {
+                            // Deselect all from this group
+                            setFormData({
+                              ...formData,
+                              permissions: formData.permissions.filter(
+                                (p) => !groupPermissions.includes(p as any)
+                              ),
+                            });
+                          } else {
+                            // Select all from this group
+                            const newPermissions = [
+                              ...formData.permissions.filter(
+                                (p) => !groupPermissions.includes(p as any)
+                              ),
+                              ...groupPermissions,
+                            ];
+                            setFormData({ ...formData, permissions: newPermissions });
+                          }
+                        }}
+                        className="text-xs px-2 py-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded transition"
                       >
-                        <input
-                          type="checkbox"
-                          checked={formData.permissions.includes(permission.key)}
-                          onChange={() => handlePermissionToggle(permission.key)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {permission.label}
-                        </span>
-                      </label>
-                    ))}
+                        {allSelected ? 'Desmarcar Todas' : 'Marcar Todas'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {group.permissions.map((permission) => (
+                        <label
+                          key={permission.key}
+                          className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.permissions.includes(permission.key)}
+                            onChange={() => handlePermissionToggle(permission.key)}
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                          />
+                          <span className="text-sm text-gray-700">
+                            {permission.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Admin Notice */}
+        {/* Admin/Broker Notice */}
         {formData.role === 'admin' && (
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 md:p-4">
             <div className="flex items-start gap-3">
@@ -389,7 +475,23 @@ export default function NewUserPage() {
                 </h3>
                 <p className="text-xs md:text-sm text-purple-800">
                   Administradores têm acesso irrestrito a todas as funcionalidades do sistema.
-                  Não é necessário configurar permissões individuais.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(formData.role === 'broker' || formData.role === 'broker_admin') && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm md:text-base font-semibold text-blue-900 mb-1">
+                  Corretor - CRECI Obrigatório
+                </h3>
+                <p className="text-xs md:text-sm text-blue-800">
+                  Corretores precisam de um CRECI válido para atuar na plataforma.
+                  {formData.role === 'broker_admin' && ' Corretores administradores têm acesso total ao sistema.'}
                 </p>
               </div>
             </div>
@@ -402,24 +504,24 @@ export default function NewUserPage() {
             type="button"
             onClick={() => router.push('/dashboard/equipe')}
             className="w-full sm:w-auto px-6 py-2.5 sm:py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
-            disabled={saving}
+            disabled={sending}
           >
             Cancelar
           </button>
           <button
             type="submit"
-            disabled={saving}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+            disabled={sending}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 sm:py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
           >
-            {saving ? (
+            {sending ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Criando...
+                Enviando convite...
               </>
             ) : (
               <>
-                <UserPlus className="w-4 h-4" />
-                Criar Usuário
+                <Send className="w-4 h-4" />
+                Enviar Convite
               </>
             )}
           </button>

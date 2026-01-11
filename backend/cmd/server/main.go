@@ -301,6 +301,7 @@ type Handlers struct {
 	TenantHandler                *handlers.TenantHandler
 	BrokerHandler                *handlers.BrokerHandler
 	UserHandler                  *handlers.UserHandler                  // Administrative users (PROMPT 10)
+	UserInvitationHandler        *handlers.UserInvitationHandler        // User invitation flow (PROMPT 11)
 	OwnerHandler                 *handlers.OwnerHandler
 	PropertyHandler              *handlers.PropertyHandler
 	ListingHandler               *handlers.ListingHandler
@@ -328,7 +329,8 @@ func initializeHandlers(authClient *auth.Client, firestoreClient *firestore.Clie
 		AuthHandler:                  handlers.NewAuthHandler(authClient, firestoreClient),
 		TenantHandler:                handlers.NewTenantHandler(services.TenantService),
 		BrokerHandler:                handlers.NewBrokerHandler(services.BrokerService, services.StorageService),
-		UserHandler:                  handlers.NewUserHandler(services.UserService, services.StorageService),      // PROMPT 10
+		UserHandler:                  handlers.NewUserHandler(services.UserService, services.StorageService),           // PROMPT 10
+		UserInvitationHandler:        handlers.NewUserInvitationHandler(authClient, firestoreClient),                   // PROMPT 11
 		OwnerHandler:                 handlers.NewOwnerHandler(services.OwnerService),
 		PropertyHandler:              handlers.NewPropertyHandler(services.PropertyService),
 		ListingHandler:               handlers.NewListingHandler(services.ListingService),
@@ -337,8 +339,8 @@ func initializeHandlers(authClient *auth.Client, firestoreClient *firestore.Clie
 		ActivityLogHandler:           handlers.NewActivityLogHandler(services.ActivityLogService),
 		StorageHandler:               storageHandler,
 		ImportHandler:                handlers.NewImportHandler(services.ImportService),
-		OwnerConfirmationHandler:     handlers.NewOwnerConfirmationHandler(services.OwnerConfirmationService),     // PROMPT 08
-		ScheduledConfirmationHandler: handlers.NewScheduledConfirmationHandler(services.MonthlyConfirmationScheduler), // Monthly confirmations
+		OwnerConfirmationHandler:     handlers.NewOwnerConfirmationHandler(services.OwnerConfirmationService),          // PROMPT 08
+		ScheduledConfirmationHandler: handlers.NewScheduledConfirmationHandler(services.MonthlyConfirmationScheduler),  // Monthly confirmations
 		// Public handlers (cross-tenant, no tenant_id required)
 		PublicPropertyHandler: handlers.NewPublicPropertyHandler(services.PropertyService),
 		PublicLeadHandler:     handlers.NewPublicLeadHandler(services.LeadService, services.PropertyService),
@@ -394,6 +396,13 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 		auth.POST("/signup", handlers.AuthHandler.Signup)
 		auth.POST("/login", handlers.AuthHandler.Login)
 		auth.POST("/refresh", authMiddleware.AuthRequired(), handlers.AuthHandler.RefreshToken)
+	}
+
+	// User invitation routes (PUBLIC - no auth required for accept/verify)
+	invitations := api.Group("/invitations")
+	{
+		invitations.GET("/:token/verify", handlers.UserInvitationHandler.VerifyInvitation)
+		invitations.POST("/:token/accept", handlers.UserInvitationHandler.AcceptInvitation)
 	}
 
 	// Tenant routes (public for creation, auth required for others)
@@ -478,6 +487,11 @@ func setupRouter(cfg *config.Config, handlers *Handlers, authMiddleware *middlew
 			tenantScoped.GET("/scheduled-confirmations/metrics", handlers.ScheduledConfirmationHandler.GetConfirmationMetrics)
 			tenantScoped.GET("/scheduled-confirmations/broker/:broker_id", handlers.ScheduledConfirmationHandler.GetBrokerScheduledConfirmations)
 			tenantScoped.GET("/scheduled-confirmations", handlers.ScheduledConfirmationHandler.GetScheduledConfirmations)
+
+			// User invitation routes (PROMPT 11)
+			tenantScoped.POST("/users/invite", handlers.UserInvitationHandler.InviteUser)
+			tenantScoped.GET("/users/invitations", handlers.UserInvitationHandler.ListInvitations)
+			tenantScoped.DELETE("/users/invitations/:invitation_id", handlers.UserInvitationHandler.CancelInvitation)
 		}
 	}
 

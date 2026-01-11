@@ -457,7 +457,9 @@
       "Bash(gcloud run services list:*)",
       "Bash(export NEXT_PUBLIC_API_URL=\"https://backend-api-333057134750.southamerica-east1.run.app/api/v1\")",
       "Bash(gcloud run services update:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(timeout 15 cmd:*)",
+      "Bash(timeout 180 npm run build:*)"
     ],
     "deny": [],
     "ask": []

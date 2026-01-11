@@ -1,0 +1,1231 @@
+=============================================================================
+PROMPT 11: MELHORIA DO CADASTRO DE TENANT - SUPORTE A PF/PJ
+=============================================================================
+
+Data: 10 de Janeiro de 2026
+Versão: 1.0
+Status: PRONTO PARA IMPLEMENTAÇÃO
+
+=============================================================================
+1. CONTEXTO E OBJETIVO
+=============================================================================
+
+SITUAÇÃO ATUAL:
+O sistema permite cadastrar tenants (imobiliárias) através de um formulário
+simples que não diferencia entre Pessoa Física (corretor autônomo) e Pessoa
+Jurídica (imobiliária, incorporadora, etc.). Existe uma flag "is_broker" que
+determina se o usuário tem CRECI, mas faltam validações importantes.
+
+OBJETIVO:
+Implementar um fluxo de cadastro robusto que:
+1. Diferencie claramente entre tenant PF (corretor autônomo) e PJ (empresa)
+2. Aplique validações de CRECI conforme tipo de negócio
+3. Permita que o administrador principal seja corretor ou não (apenas em PJ)
+4. Prepare a estrutura para modelo de assinatura (planos)
+5. Mantenha conformidade com regulamentação CRECI/COFECI
+
+DOCUMENTAÇÃO DE REFERÊNCIA:
+- PROMPT 10: Sistema robusto de perfis de acesso (segregação broker/user)
+- ANALISE_CONFORMIDADE_CRECI_COFECI.md: Requisitos regulatórios
+
+=============================================================================
+2. REQUISITOS FUNCIONAIS
+=============================================================================
+
+2.1 TIPOS DE TENANT
+-------------------
+
+PESSOA FÍSICA (PF) - Corretor Autônomo:
+- Documento: CPF (11 dígitos)
+- Business Type: "corretor_autonomo" (fixo)
+- CRECI: CRECI-F (Pessoa Física) OBRIGATÓRIO
+  Formato: XXXXX-F/UF (ex: 12345-F/SP)
+- Usuário cadastrante: É automaticamente corretor e administrador
+- Entity criada: Broker (com role "broker_admin")
+
+PESSOA JURÍDICA (PJ) - Empresa:
+- Documento: CNPJ (14 dígitos)
+- Business Types disponíveis:
+
+  a) IMOBILIÁRIA:
+     - CRECI: CRECI-J (Pessoa Jurídica) OBRIGATÓRIO
+       Formato: XXXXX-J/UF (ex: 67890-J/SP)
+     ⚠️  IMPORTANTE: Apenas imobiliárias precisam de CRECI-J obrigatório
+
+  b) INCORPORADORA:
+     - CRECI: CRECI-J OPCIONAL
+     - Incorporadoras NÃO são obrigadas a ter CRECI (podem vender próprios empreendimentos)
+
+  c) CONSTRUTORA:
+     - CRECI: CRECI-J OPCIONAL
+     - Construtoras NÃO são obrigadas a ter CRECI (podem vender próprias construções)
+
+  d) LOTEADORA:
+     - CRECI: CRECI-J OPCIONAL
+     - Loteadoras NÃO são obrigadas a ter CRECI (podem vender próprios loteamentos)
+
+- Administrador: Pode ser corretor OU apenas administrativo
+
+  Se CORRETOR:
+  - Precisa informar CRECI-F individual
+  - Entity criada: Broker (com role "broker_admin")
+
+  Se APENAS ADMINISTRATIVO:
+  - Não precisa CRECI
+  - Entity criada: User (com role "admin")
+
+2.2 PLANO DE ASSINATURA
+-----------------------
+
+Todos os tenants começam com:
+- subscription_plan: "full"
+- subscription_status: "active"
+- trial_ends_at: null (sem período trial por enquanto)
+- subscription_started_at: data atual
+
+NOTA: A estrutura está preparada para futura expansão com planos
+"free", "basic", "pro" e períodos trial.
+
+=============================================================================
+3. MATRIZ DE VALIDAÇÃO CRECI
+=============================================================================
+
++---------------+-------------------+----------------------+------------------+---------------+
+| Tenant Type   | Business Type     | Tenant CRECI         | Admin CRECI      | Admin Entity  |
++---------------+-------------------+----------------------+------------------+---------------+
+| PF            | corretor_autonomo | CRECI-F ✅ obrig.    | = Tenant CRECI   | Broker        |
++---------------+-------------------+----------------------+------------------+---------------+
+| PJ            | imobiliaria       | CRECI-J ✅ obrig.    | CRECI-F se broker| Broker ou User|
++---------------+-------------------+----------------------+------------------+---------------+
+| PJ            | incorporadora     | CRECI-J ⚪ opcional  | CRECI-F se broker| Broker ou User|
++---------------+-------------------+----------------------+------------------+---------------+
+| PJ            | construtora       | CRECI-J ⚪ opcional  | CRECI-F se broker| Broker ou User|
++---------------+-------------------+----------------------+------------------+---------------+
+| PJ            | loteadora         | CRECI-J ⚪ opcional  | CRECI-F se broker| Broker ou User|
++---------------+-------------------+----------------------+------------------+---------------+
+
+LEGENDA:
+✅ = Obrigatório
+⚪ = Opcional
+
+IMPORTANTE - REGRA DE CRECI PJ:
+- CRECI-J é OBRIGATÓRIO apenas para IMOBILIÁRIAS
+- Incorporadoras, construtoras e loteadoras NÃO precisam de CRECI porque:
+  * Vendem seus próprios empreendimentos/construções/loteamentos
+  * Não fazem intermediação de imóveis de terceiros
+  * Portanto, não se enquadram na Lei 6.530/78 (intermediação imobiliária)
+- Se uma incorporadora/construtora/loteadora quiser TAMBÉM atuar como imobiliária
+  (vendendo imóveis de terceiros), aí sim precisará obter CRECI-J
+
+=============================================================================
+4. MODIFICAÇÕES NO BACKEND
+=============================================================================
+
+4.1 MODELO TENANT (backend/internal/models/tenant.go)
+------------------------------------------------------
+
+ADICIONAR CAMPOS:
+
+type Tenant struct {
+    // ... campos existentes ...
+
+    // NOVO: Tipo de tenant
+    TenantType string `firestore:"tenant_type" json:"tenant_type"` // "pf" ou "pj"
+
+    // NOVO: Campos de assinatura
+    SubscriptionPlan      string     `firestore:"subscription_plan" json:"subscription_plan"`           // "free", "full"
+    SubscriptionStatus    string     `firestore:"subscription_status" json:"subscription_status"`       // "active", "trial", "expired", "cancelled"
+    TrialEndsAt          *time.Time  `firestore:"trial_ends_at,omitempty" json:"trial_ends_at,omitempty"`
+    SubscriptionStartedAt *time.Time `firestore:"subscription_started_at,omitempty" json:"subscription_started_at,omitempty"`
+}
+
+NOTAS:
+- Campos existentes (document, document_type, business_type, creci) são mantidos
+- tenant_type é novo campo obrigatório: "pf" ou "pj"
+
+4.2 SIGNUP REQUEST (backend/internal/handlers/auth_handler.go)
+---------------------------------------------------------------
+
+ATUALIZAR ESTRUTURA:
+
+type SignupRequest struct {
+    // Informações do usuário (administrador)
+    Email      string `json:"email" binding:"required,email"`
+    Password   string `json:"password" binding:"required,min=6"`
+    Name       string `json:"name" binding:"required"`
+    Phone      string `json:"phone" binding:"required"`
+
+    // NOVO: Informações do tenant
+    TenantName   string `json:"tenant_name" binding:"required"`
+    TenantType   string `json:"tenant_type" binding:"required"`     // "pf" ou "pj"
+    Document     string `json:"document" binding:"required"`         // CPF ou CNPJ
+
+    // NOVO: PJ-specific
+    BusinessType string `json:"business_type,omitempty"`             // Required if tenant_type == "pj"
+    TenantCRECI  string `json:"tenant_creci,omitempty"`              // Tenant-level CRECI
+
+    // NOVO: Admin role
+    IsUserBroker bool   `json:"is_user_broker"`                      // Admin é corretor?
+    UserCRECI    string `json:"user_creci,omitempty"`                // CRECI individual do admin
+}
+
+4.3 LÓGICA DE SIGNUP (backend/internal/handlers/auth_handler.go)
+-----------------------------------------------------------------
+
+IMPLEMENTAR FLUXO CONDICIONAL:
+
+func (h *AuthHandler) Signup(c *gin.Context) {
+    var req SignupRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(400, gin.H{"error": err.Error()})
+        return
+    }
+
+    ctx := context.Background()
+
+    // 1. VALIDAR TENANT TYPE
+    if req.TenantType != "pf" && req.TenantType != "pj" {
+        c.JSON(400, gin.H{"error": "tenant_type must be 'pf' or 'pj'"})
+        return
+    }
+
+    // 2. FLUXO PF (Pessoa Física)
+    if req.TenantType == "pf" {
+        // 2a. Validar CPF
+        if err := utils.ValidateCPF(req.Document); err != nil {
+            c.JSON(400, gin.H{"error": "CPF inválido"})
+            return
+        }
+
+        // 2b. CRECI-F obrigatório
+        if req.TenantCRECI == "" {
+            c.JSON(400, gin.H{"error": "CRECI-F é obrigatório para corretor autônomo"})
+            return
+        }
+
+        // 2c. Validar formato CRECI-F
+        if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+            c.JSON(400, gin.H{"error": "CRECI inválido"})
+            return
+        }
+        if !strings.Contains(req.TenantCRECI, "-F/") {
+            c.JSON(400, gin.H{"error": "PF requer CRECI-F (Pessoa Física)"})
+            return
+        }
+
+        // 2d. Fixar business_type
+        req.BusinessType = "corretor_autonomo"
+
+        // 2e. Admin é sempre broker em PF
+        req.IsUserBroker = true
+        req.UserCRECI = req.TenantCRECI // Mesmo CRECI
+    }
+
+    // 3. FLUXO PJ (Pessoa Jurídica)
+    if req.TenantType == "pj" {
+        // 3a. Validar CNPJ
+        if err := utils.ValidateCNPJ(req.Document); err != nil {
+            c.JSON(400, gin.H{"error": "CNPJ inválido"})
+            return
+        }
+
+        // 3b. Business type obrigatório
+        if req.BusinessType == "" {
+            c.JSON(400, gin.H{"error": "business_type é obrigatório para PJ"})
+            return
+        }
+
+        validBusinessTypes := []string{"imobiliaria", "incorporadora", "construtora", "loteadora"}
+        if !contains(validBusinessTypes, req.BusinessType) {
+            c.JSON(400, gin.H{"error": "business_type inválido"})
+            return
+        }
+
+        // 3c. CRECI-J obrigatório APENAS para imobiliária
+        // IMPORTANTE: Incorporadoras, construtoras e loteadoras NÃO precisam de CRECI porque
+        // vendem seus próprios empreendimentos (não fazem intermediação de terceiros)
+        if req.BusinessType == "imobiliaria" {
+            if req.TenantCRECI == "" {
+                c.JSON(400, gin.H{"error": "CRECI-J é obrigatório para imobiliária"})
+                return
+            }
+            if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+                c.JSON(400, gin.H{"error": "CRECI inválido"})
+                return
+            }
+            if !strings.Contains(req.TenantCRECI, "-J/") {
+                c.JSON(400, gin.H{"error": "Imobiliária requer CRECI-J (Pessoa Jurídica)"})
+                return
+            }
+        }
+
+        // 3d. CRECI opcional para incorporadoras, construtoras e loteadoras
+        // (validar formato se fornecido)
+        if req.TenantCRECI != "" {
+            if err := utils.ValidateCRECI(req.TenantCRECI); err != nil {
+                c.JSON(400, gin.H{"error": "CRECI inválido"})
+                return
+            }
+        }
+
+        // 3e. Validar CRECI do admin se broker
+        if req.IsUserBroker {
+            if req.UserCRECI == "" {
+                c.JSON(400, gin.H{"error": "CRECI é obrigatório para corretores"})
+                return
+            }
+            if err := utils.ValidateCRECI(req.UserCRECI); err != nil {
+                c.JSON(400, gin.H{"error": "CRECI do admin inválido"})
+                return
+            }
+            if !strings.Contains(req.UserCRECI, "-F/") {
+                c.JSON(400, gin.H{"error": "Admin corretor precisa de CRECI-F individual"})
+                return
+            }
+        }
+    }
+
+    // 4. CRIAR FIREBASE USER
+    userRecord, err := h.firebaseAuth.CreateUser(ctx, (&auth.UserToCreate{}).
+        Email(req.Email).
+        Password(req.Password).
+        DisplayName(req.Name).
+        EmailVerified(false))
+    if err != nil {
+        c.JSON(500, gin.H{"error": "Erro ao criar usuário no Firebase"})
+        return
+    }
+
+    // 5. CRIAR TENANT
+    tenantID := uuid.New().String()
+    slug := generateSlug(req.TenantName)
+
+    documentType := "cpf"
+    if req.TenantType == "pj" {
+        documentType = "cnpj"
+    }
+
+    now := time.Now()
+    tenant := models.Tenant{
+        ID:                    tenantID,
+        Name:                  req.TenantName,
+        Slug:                  slug,
+        TenantType:            req.TenantType,
+        Document:              req.Document,
+        DocumentType:          documentType,
+        BusinessType:          req.BusinessType,
+        CRECI:                 req.TenantCRECI,
+        Email:                 req.Email,
+        Phone:                 req.Phone,
+        SubscriptionPlan:      "full",
+        SubscriptionStatus:    "active",
+        SubscriptionStartedAt: &now,
+        IsActive:              true,
+        CreatedAt:             now,
+        UpdatedAt:             now,
+    }
+
+    _, err = h.firestoreDB.Collection("tenants").Doc(tenantID).Set(ctx, tenant)
+    if err != nil {
+        h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+        c.JSON(500, gin.H{"error": "Erro ao criar tenant"})
+        return
+    }
+
+    // 6. CRIAR BROKER OU USER
+    var entityID string
+    var role string
+
+    if req.IsUserBroker {
+        // 6a. CRIAR BROKER
+        brokerID := uuid.New().String()
+        broker := models.Broker{
+            ID:          brokerID,
+            TenantID:    tenantID,
+            FirebaseUID: userRecord.UID,
+            Name:        req.Name,
+            Email:       req.Email,
+            Phone:       req.Phone,
+            CRECI:       req.UserCRECI,
+            Role:        "broker_admin",
+            IsActive:    true,
+            CreatedAt:   now,
+            UpdatedAt:   now,
+        }
+
+        _, err = h.firestoreDB.Collection("tenants").Doc(tenantID).
+            Collection("brokers").Doc(brokerID).Set(ctx, broker)
+        if err != nil {
+            h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+            h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+            c.JSON(500, gin.H{"error": "Erro ao criar broker"})
+            return
+        }
+
+        entityID = brokerID
+        role = "broker_admin"
+
+    } else {
+        // 6b. CRIAR USER
+        userID := uuid.New().String()
+        user := models.User{
+            ID:          userID,
+            TenantID:    tenantID,
+            FirebaseUID: userRecord.UID,
+            Name:        req.Name,
+            Email:       req.Email,
+            Phone:       req.Phone,
+            Role:        "admin",
+            Permissions: []string{
+                "properties.view_all",
+                "properties.create",
+                "properties.edit_all",
+                "properties.delete",
+                "brokers.view",
+                "brokers.create",
+                "brokers.edit",
+                "users.view",
+                "users.create",
+                "users.edit",
+                "settings.view",
+                "settings.edit",
+            },
+            IsActive:  true,
+            CreatedAt: now,
+            UpdatedAt: now,
+        }
+
+        _, err = h.firestoreDB.Collection("tenants").Doc(tenantID).
+            Collection("users").Doc(userID).Set(ctx, user)
+        if err != nil {
+            h.firestoreDB.Collection("tenants").Doc(tenantID).Delete(ctx)
+            h.firebaseAuth.DeleteUser(ctx, userRecord.UID)
+            c.JSON(500, gin.H{"error": "Erro ao criar usuário administrativo"})
+            return
+        }
+
+        entityID = userID
+        role = "admin"
+    }
+
+    // 7. SET CUSTOM CLAIMS
+    claims := map[string]interface{}{
+        "tenant_id": tenantID,
+        "role":      role,
+        "broker_id": entityID, // Backward compatibility
+        "user_id":   entityID,
+    }
+    err = h.firebaseAuth.SetCustomUserClaims(ctx, userRecord.UID, claims)
+    if err != nil {
+        log.Printf("⚠️  Erro ao definir custom claims: %v", err)
+    }
+
+    // 8. GENERATE TOKEN
+    token, err := h.firebaseAuth.CustomToken(ctx, userRecord.UID)
+    if err != nil {
+        c.JSON(500, gin.H{"error": "Erro ao gerar token"})
+        return
+    }
+
+    // 9. LOG ACTIVITY
+    go h.logActivity(ctx, tenantID, "tenant_created", map[string]interface{}{
+        "tenant_type":   req.TenantType,
+        "business_type": req.BusinessType,
+        "has_creci":     req.TenantCRECI != "",
+    })
+
+    if req.IsUserBroker {
+        go h.logActivity(ctx, tenantID, "broker_created", map[string]interface{}{
+            "broker_id": entityID,
+            "creci":     req.UserCRECI,
+        })
+    } else {
+        go h.logActivity(ctx, tenantID, "user_created", map[string]interface{}{
+            "user_id": entityID,
+        })
+    }
+
+    // 10. RESPONSE
+    c.JSON(201, SignupResponse{
+        TenantID:      tenantID,
+        BrokerID:      entityID,
+        FirebaseToken: token,
+        User: map[string]interface{}{
+            "uid":   userRecord.UID,
+            "email": req.Email,
+            "name":  req.Name,
+            "role":  role,
+        },
+    })
+}
+
+4.4 VALIDADORES (backend/internal/utils/validators.go)
+-------------------------------------------------------
+
+CRIAR OU ATUALIZAR:
+
+// ValidateCPF valida formato e dígitos verificadores de CPF
+func ValidateCPF(cpf string) error {
+    // Remove pontos e traços
+    cpf = strings.ReplaceAll(cpf, ".", "")
+    cpf = strings.ReplaceAll(cpf, "-", "")
+
+    // Deve ter 11 dígitos
+    if len(cpf) != 11 {
+        return errors.New("CPF deve ter 11 dígitos")
+    }
+
+    // Validar dígitos verificadores
+    // (implementar algoritmo padrão de validação CPF)
+    // ...
+
+    return nil
+}
+
+// ValidateCNPJ valida formato e dígitos verificadores de CNPJ
+func ValidateCNPJ(cnpj string) error {
+    // Remove pontos, barras e traços
+    cnpj = strings.ReplaceAll(cnpj, ".", "")
+    cnpj = strings.ReplaceAll(cnpj, "/", "")
+    cnpj = strings.ReplaceAll(cnpj, "-", "")
+
+    // Deve ter 14 dígitos
+    if len(cnpj) != 14 {
+        return errors.New("CNPJ deve ter 14 dígitos")
+    }
+
+    // Validar dígitos verificadores
+    // (implementar algoritmo padrão de validação CNPJ)
+    // ...
+
+    return nil
+}
+
+// ValidateCRECI valida formato de CRECI (F ou J)
+func ValidateCRECI(creci string) error {
+    // Formato esperado: XXXXX-F/UF ou XXXXX-J/UF
+    // Exemplo: 12345-F/SP ou 67890-J/RJ
+
+    regex := regexp.MustCompile(`^\d{5}-(F|J)/[A-Z]{2}$`)
+    if !regex.MatchString(creci) {
+        return errors.New("CRECI deve estar no formato XXXXX-F/UF ou XXXXX-J/UF")
+    }
+
+    // Validar UF
+    validUFs := []string{
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
+        "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
+        "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+    }
+
+    uf := creci[len(creci)-2:]
+    if !contains(validUFs, uf) {
+        return errors.New("UF inválida no CRECI")
+    }
+
+    return nil
+}
+
+=============================================================================
+5. MODIFICAÇÕES NO FRONTEND
+=============================================================================
+
+5.1 FORMULÁRIO MULTI-STEP (frontend-admin/components/auth/signup-form.tsx)
+---------------------------------------------------------------------------
+
+IMPLEMENTAR STEPS:
+
+interface SignupFormState {
+  // Step 1: Tenant Type
+  tenantType: 'pf' | 'pj' | null;
+
+  // Step 2: Tenant Info
+  tenantName: string;
+  document: string;
+  businessType?: string;
+  tenantCreci?: string;
+
+  // Step 3: Admin Info
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  isUserBroker: boolean;
+  userCreci?: string;
+
+  // UI
+  currentStep: 1 | 2 | 3;
+  errors: Record<string, string>;
+  loading: boolean;
+}
+
+STEP 1: SELEÇÃO DE TIPO
+------------------------
+
+<div className="step-1">
+  <h2>Que tipo de negócio você representa?</h2>
+
+  <div className="options">
+    <button
+      onClick={() => setTenantType('pf')}
+      className={tenantType === 'pf' ? 'selected' : ''}
+    >
+      <Building className="icon" />
+      <h3>Corretor Autônomo</h3>
+      <p>Você é um corretor individual com CRECI-F</p>
+    </button>
+
+    <button
+      onClick={() => setTenantType('pj')}
+      className={tenantType === 'pj' ? 'selected' : ''}
+    >
+      <Building2 className="icon" />
+      <h3>Imobiliária / Empresa</h3>
+      <p>Sua empresa possui CNPJ</p>
+    </button>
+  </div>
+
+  <button onClick={() => setCurrentStep(2)} disabled={!tenantType}>
+    Próximo →
+  </button>
+</div>
+
+STEP 2A: INFO PF (se tenantType === 'pf')
+------------------------------------------
+
+<div className="step-2-pf">
+  <h2>Dados do Corretor Autônomo</h2>
+
+  <Input
+    label="Nome Completo *"
+    value={name}
+    onChange={setName}
+  />
+
+  <Input
+    label="Email *"
+    type="email"
+    value={email}
+    onChange={setEmail}
+  />
+
+  <Input
+    label="Telefone (WhatsApp) *"
+    value={phone}
+    onChange={setPhone}
+    placeholder="+5511999999999"
+  />
+
+  <CpfInput
+    label="CPF *"
+    value={document}
+    onChange={setDocument}
+  />
+
+  <CreciInput
+    type="F"
+    label="CRECI-F *"
+    value={tenantCreci}
+    onChange={setTenantCreci}
+    helperText="Seu CRECI de Pessoa Física"
+  />
+
+  <PasswordInput
+    label="Senha *"
+    value={password}
+    onChange={setPassword}
+  />
+
+  <PasswordInput
+    label="Confirmar Senha *"
+    value={confirmPassword}
+    onChange={setConfirmPassword}
+  />
+
+  <div className="actions">
+    <button onClick={() => setCurrentStep(1)}>← Voltar</button>
+    <button onClick={handleSubmit}>Criar Conta</button>
+  </div>
+</div>
+
+STEP 2B: INFO PJ (se tenantType === 'pj')
+------------------------------------------
+
+<div className="step-2-pj">
+  <h2>Informações da Empresa</h2>
+
+  <div className="business-type">
+    <label>Tipo de Empresa *</label>
+    <div className="radio-group">
+      <label>
+        <input
+          type="radio"
+          name="businessType"
+          value="imobiliaria"
+          checked={businessType === 'imobiliaria'}
+          onChange={(e) => setBusinessType(e.target.value)}
+        />
+        <span>Imobiliária</span>
+        <small>(requer CRECI-J)</small>
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="businessType"
+          value="incorporadora"
+          checked={businessType === 'incorporadora'}
+          onChange={(e) => setBusinessType(e.target.value)}
+        />
+        <span>Incorporadora</span>
+        <small>(CRECI-J opcional)</small>
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="businessType"
+          value="construtora"
+          checked={businessType === 'construtora'}
+          onChange={(e) => setBusinessType(e.target.value)}
+        />
+        <span>Construtora</span>
+        <small>(CRECI-J opcional)</small>
+      </label>
+
+      <label>
+        <input
+          type="radio"
+          name="businessType"
+          value="loteadora"
+          checked={businessType === 'loteadora'}
+          onChange={(e) => setBusinessType(e.target.value)}
+        />
+        <span>Loteadora</span>
+        <small>(CRECI-J opcional)</small>
+      </label>
+    </div>
+
+    <p className="helper-text">
+      ℹ️ Apenas imobiliárias precisam de CRECI-J obrigatório.
+      Incorporadoras, construtoras e loteadoras podem optar por ter CRECI-J
+      se quiserem também intermediar imóveis de terceiros.
+    </p>
+  </div>
+
+  <Input
+    label="Nome da Empresa *"
+    value={tenantName}
+    onChange={setTenantName}
+  />
+
+  <CnpjInput
+    label="CNPJ *"
+    value={document}
+    onChange={setDocument}
+  />
+
+  {businessType === 'imobiliaria' && (
+    <CreciInput
+      type="J"
+      label="CRECI-J da Empresa *"
+      value={tenantCreci}
+      onChange={setTenantCreci}
+      helperText="CRECI da imobiliária (Pessoa Jurídica)"
+    />
+  )}
+
+  {businessType && businessType !== 'imobiliaria' && (
+    <CreciInput
+      type="J"
+      label="CRECI-J da Empresa (opcional)"
+      value={tenantCreci}
+      onChange={setTenantCreci}
+      helperText="Opcional - apenas necessário se sua empresa também atuar como imobiliária intermediando imóveis de terceiros"
+    />
+  )}
+
+  <div className="actions">
+    <button onClick={() => setCurrentStep(1)}>← Voltar</button>
+    <button onClick={() => setCurrentStep(3)}>Próximo →</button>
+  </div>
+</div>
+
+STEP 3: INFO ADMIN (se tenantType === 'pj')
+--------------------------------------------
+
+<div className="step-3-admin">
+  <h2>Seus Dados (Administrador Principal)</h2>
+
+  <Input
+    label="Nome Completo *"
+    value={name}
+    onChange={setName}
+  />
+
+  <Input
+    label="Email *"
+    type="email"
+    value={email}
+    onChange={setEmail}
+  />
+
+  <Input
+    label="Telefone (WhatsApp) *"
+    value={phone}
+    onChange={setPhone}
+    placeholder="+5511999999999"
+  />
+
+  <PasswordInput
+    label="Senha *"
+    value={password}
+    onChange={setPassword}
+  />
+
+  <PasswordInput
+    label="Confirmar Senha *"
+    value={confirmPassword}
+    onChange={setConfirmPassword}
+  />
+
+  <div className="broker-section">
+    <label className="checkbox">
+      <input
+        type="checkbox"
+        checked={isUserBroker}
+        onChange={(e) => setIsUserBroker(e.target.checked)}
+      />
+      <span>Sou corretor de imóveis (tenho CRECI)</span>
+    </label>
+
+    {isUserBroker && (
+      <CreciInput
+        type="F"
+        label="Seu CRECI *"
+        value={userCreci}
+        onChange={setUserCreci}
+        helperText="Seu CRECI individual (diferente do CRECI da empresa)"
+      />
+    )}
+
+    {!isUserBroker && (
+      <p className="helper">
+        Você terá acesso administrativo sem aparecer como corretor
+      </p>
+    )}
+  </div>
+
+  <div className="actions">
+    <button onClick={() => setCurrentStep(2)}>← Voltar</button>
+    <button onClick={handleSubmit}>Criar Conta</button>
+  </div>
+</div>
+
+5.2 COMPONENTE CRECI INPUT (frontend-admin/components/ui/creci-input.tsx)
+--------------------------------------------------------------------------
+
+CRIAR NOVO COMPONENTE:
+
+interface CreciInputProps {
+  type: 'F' | 'J';
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  helperText?: string;
+  error?: string;
+  required?: boolean;
+}
+
+export function CreciInput({
+  type,
+  label,
+  value,
+  onChange,
+  helperText,
+  error,
+  required = false,
+}: CreciInputProps) {
+  const [touched, setTouched] = useState(false);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.toUpperCase();
+
+    // Remove caracteres inválidos
+    val = val.replace(/[^0-9A-Z\-\/]/g, '');
+
+    onChange(val);
+  };
+
+  const validateFormat = (val: string) => {
+    const regex = type === 'F'
+      ? /^\d{5}-F\/[A-Z]{2}$/
+      : /^\d{5}-J\/[A-Z]{2}$/;
+    return regex.test(val);
+  };
+
+  const isValid = !value || validateFormat(value);
+
+  return (
+    <div className="creci-input">
+      <label>
+        {label} {required && <span className="required">*</span>}
+      </label>
+
+      <input
+        type="text"
+        value={value}
+        onChange={handleChange}
+        onBlur={() => setTouched(true)}
+        placeholder={type === 'F' ? '12345-F/SP' : '67890-J/SP'}
+        className={touched && !isValid ? 'error' : ''}
+        maxLength={11}
+      />
+
+      {helperText && (
+        <p className="helper-text">{helperText}</p>
+      )}
+
+      {error && (
+        <p className="error-text">{error}</p>
+      )}
+
+      {touched && value && !isValid && (
+        <p className="warning-text">
+          Formato esperado: {type === 'F' ? '12345-F/SP' : '67890-J/SP'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+5.3 VALIDAÇÃO ZOD (frontend-admin/lib/validations.ts)
+------------------------------------------------------
+
+ATUALIZAR SCHEMA:
+
+export const signupSchema = z.object({
+  // Tenant Type
+  tenant_type: z.enum(['pf', 'pj'], {
+    errorMap: () => ({ message: 'Selecione o tipo de negócio' })
+  }),
+
+  // Tenant Info
+  tenant_name: z.string().min(1, 'Nome é obrigatório'),
+  document: z.string().min(11, 'CPF/CNPJ inválido'),
+  business_type: z.enum([
+    'corretor_autonomo',
+    'imobiliaria',
+    'incorporadora',
+    'construtora',
+    'loteadora'
+  ]).optional(),
+  tenant_creci: z.string().optional(),
+
+  // Admin Info
+  name: z.string().min(1, 'Nome completo é obrigatório'),
+  email: z.string().email('Email válido é obrigatório'),
+  password: z.string()
+    .min(6, 'Senha deve ter no mínimo 6 caracteres')
+    .regex(/[A-Z]/, 'Deve conter maiúscula')
+    .regex(/[a-z]/, 'Deve conter minúscula')
+    .regex(/[0-9]/, 'Deve conter número'),
+  phone: z.string().min(10, 'Telefone inválido'),
+  is_user_broker: z.boolean(),
+  user_creci: z.string().optional(),
+}).refine((data) => {
+  // PF: tenant_creci obrigatório
+  if (data.tenant_type === 'pf' && !data.tenant_creci) {
+    return false;
+  }
+
+  // PF: business_type = corretor_autonomo
+  if (data.tenant_type === 'pf' && data.business_type !== 'corretor_autonomo') {
+    return false;
+  }
+
+  // PJ: business_type obrigatório
+  if (data.tenant_type === 'pj' && !data.business_type) {
+    return false;
+  }
+
+  // PJ imobiliaria: tenant_creci obrigatório
+  if (data.tenant_type === 'pj' && data.business_type === 'imobiliaria' && !data.tenant_creci) {
+    return false;
+  }
+
+  // is_user_broker: user_creci obrigatório
+  if (data.is_user_broker && !data.user_creci) {
+    return false;
+  }
+
+  return true;
+}, {
+  message: 'Configuração inválida',
+});
+
+=============================================================================
+6. MIGRAÇÃO DE DADOS EXISTENTES
+=============================================================================
+
+CRIAR SCRIPT: backend/scripts/migrate_tenant_types.go
+
+package main
+
+import (
+    "context"
+    "log"
+    "time"
+
+    "cloud.google.com/go/firestore"
+    // ... imports
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Conectar ao Firestore
+    client, err := firestore.NewClient(ctx, "project-id")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer client.Close()
+
+    // Buscar todos os tenants
+    tenants, err := client.Collection("tenants").Documents(ctx).GetAll()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for _, tenantDoc := range tenants {
+        var tenant map[string]interface{}
+        tenantDoc.DataTo(&tenant)
+
+        // Inferir tenant_type
+        tenantType := "pj" // Default
+        if tenant["document_type"] == "cpf" {
+            tenantType = "pf"
+        }
+
+        // Inferir business_type se não existir
+        businessType := tenant["business_type"]
+        if businessType == "" {
+            if tenantType == "pf" {
+                businessType = "corretor_autonomo"
+            } else {
+                businessType = "imobiliaria" // Default PJ
+            }
+        }
+
+        // Preparar updates
+        updates := []firestore.Update{
+            {Path: "tenant_type", Value: tenantType},
+            {Path: "business_type", Value: businessType},
+            {Path: "subscription_plan", Value: "full"},
+            {Path: "subscription_status", Value: "active"},
+            {Path: "subscription_started_at", Value: time.Now()},
+        }
+
+        // Aplicar updates
+        _, err := tenantDoc.Ref.Update(ctx, updates)
+        if err != nil {
+            log.Printf("❌ Erro ao migrar tenant %s: %v", tenantDoc.Ref.ID, err)
+            continue
+        }
+
+        log.Printf("✅ Migrado tenant %s (tipo: %s)", tenantDoc.Ref.ID, tenantType)
+    }
+
+    log.Println("✅ Migração concluída")
+}
+
+EXECUTAR:
+1. Testar em ambiente de staging primeiro
+2. Validar que todos os tenants foram migrados corretamente
+3. Executar em produção
+4. Monitorar logs de erros
+
+=============================================================================
+7. TESTES
+=============================================================================
+
+7.1 TESTES BACKEND
+------------------
+
+Arquivo: backend/internal/handlers/auth_handler_test.go
+
+func TestSignup_PF_Success(t *testing.T) {
+    // Arrange
+    req := SignupRequest{
+        TenantType:  "pf",
+        TenantName:  "João Silva Imóveis",
+        Document:    "12345678901",
+        TenantCreci: "12345-F/SP",
+        Name:        "João Silva",
+        Email:       "joao@example.com",
+        Phone:       "+5511999999999",
+        Password:    "Pass123",
+    }
+
+    // Act
+    resp := callSignup(req)
+
+    // Assert
+    assert.Equal(t, 201, resp.StatusCode)
+    assert.NotEmpty(t, resp.TenantID)
+    assert.NotEmpty(t, resp.BrokerID)
+    assert.Equal(t, "broker_admin", resp.User.Role)
+}
+
+func TestSignup_PF_MissingCRECI(t *testing.T) {
+    req := SignupRequest{
+        TenantType: "pf",
+        Document:   "12345678901",
+        // TenantCreci omitido
+    }
+
+    resp := callSignup(req)
+
+    assert.Equal(t, 400, resp.StatusCode)
+    assert.Contains(t, resp.Error, "CRECI-F é obrigatório")
+}
+
+func TestSignup_PJ_Imobiliaria_Success(t *testing.T) {
+    req := SignupRequest{
+        TenantType:   "pj",
+        TenantName:   "Imobiliária ABC",
+        Document:     "12345678000190",
+        BusinessType: "imobiliaria",
+        TenantCreci:  "67890-J/SP",
+        IsUserBroker: true,
+        UserCreci:    "11111-F/SP",
+        // ...
+    }
+
+    resp := callSignup(req)
+
+    assert.Equal(t, 201, resp.StatusCode)
+    assert.Equal(t, "broker_admin", resp.User.Role)
+}
+
+func TestSignup_PJ_AdminNotBroker_CreatesUser(t *testing.T) {
+    req := SignupRequest{
+        TenantType:   "pj",
+        BusinessType: "incorporadora",
+        IsUserBroker: false, // Admin não é corretor
+        // ...
+    }
+
+    resp := callSignup(req)
+
+    assert.Equal(t, 201, resp.StatusCode)
+    assert.Equal(t, "admin", resp.User.Role)
+}
+
+7.2 TESTES FRONTEND E2E
+------------------------
+
+Arquivo: frontend-admin/tests/e2e/signup.spec.ts
+
+describe('Signup Flow', () => {
+  test('PF: Corretor Autônomo', async ({ page }) => {
+    await page.goto('/signup');
+
+    // Step 1: Select PF
+    await page.click('button:has-text("Corretor Autônomo")');
+    await page.click('button:has-text("Próximo")');
+
+    // Step 2: Fill form
+    await page.fill('input[name="name"]', 'João Silva');
+    await page.fill('input[name="email"]', 'joao@example.com');
+    await page.fill('input[name="phone"]', '+5511999999999');
+    await page.fill('input[name="document"]', '12345678901');
+    await page.fill('input[name="tenantCreci"]', '12345-F/SP');
+    await page.fill('input[name="password"]', 'Pass123');
+    await page.fill('input[name="confirmPassword"]', 'Pass123');
+
+    // Submit
+    await page.click('button:has-text("Criar Conta")');
+
+    // Assert redirect to dashboard
+    await page.waitForURL('/dashboard');
+  });
+
+  test('PJ: Imobiliária com admin broker', async ({ page }) => {
+    // ...
+  });
+});
+
+=============================================================================
+8. CONFORMIDADE REGULATÓRIA
+=============================================================================
+
+Esta implementação garante conformidade com:
+
+✅ RESOLUÇÃO COFECI 1.065/2007 (Publicidade):
+   - CRECI exibido em anúncios
+   - Tenant tem CRECI (PF ou PJ imobiliária)
+
+✅ LEI 6.530/78 (Profissão de Corretor):
+   - Apenas corretores com CRECI podem intermediar
+   - Brokers sempre têm CRECI-F individual
+
+✅ PROMPT 10 (Segregação Broker/User):
+   - Brokers na collection /brokers (com CRECI)
+   - Users na collection /users (sem CRECI)
+
+✅ ANÁLISE DE COMPLIANCE:
+   - Plataforma como provedor de tecnologia
+   - Não precisa CRECI próprio
+
+=============================================================================
+9. CHECKLIST DE IMPLEMENTAÇÃO
+=============================================================================
+
+BACKEND:
+[ ] Adicionar campos ao modelo Tenant (tenant_type, subscription_*)
+[ ] Atualizar SignupRequest com novos campos
+[ ] Implementar validação condicional no Signup()
+[ ] Criar validadores CPF/CNPJ/CRECI
+[ ] Criar script de migração
+[ ] Escrever testes unitários
+[ ] Testar integração
+
+FRONTEND:
+[ ] Criar componente CreciInput
+[ ] Criar componente CpfInput
+[ ] Criar componente CnpjInput
+[ ] Converter signup-form para multi-step
+[ ] Implementar Step 1 (seleção tipo)
+[ ] Implementar Step 2a (PF)
+[ ] Implementar Step 2b (PJ empresa)
+[ ] Implementar Step 3 (PJ admin)
+[ ] Atualizar validationSchema
+[ ] Escrever testes E2E
+
+MIGRAÇÃO:
+[ ] Executar script em staging
+[ ] Validar dados migrados
+[ ] Executar em produção
+[ ] Monitorar logs
+
+DOCUMENTAÇÃO:
+[ ] Atualizar API docs
+[ ] Criar guia do usuário
+[ ] Preparar FAQ
+
+=============================================================================
+10. PRÓXIMOS PASSOS PÓS-IMPLEMENTAÇÃO
+=============================================================================
+
+1. Monitoramento de signup (taxa de sucesso por tipo)
+2. Feedback de usuários sobre novo fluxo
+3. Integração com API COFECI (validação automática de CRECI)
+4. Implementação de planos pagos (free, basic, pro)
+5. Trial period de 30 dias
+6. Notificações de vencimento de assinatura
+
+=============================================================================
+FIM DO PROMPT 11
+=============================================================================
